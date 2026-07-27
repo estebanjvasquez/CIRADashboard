@@ -1,0 +1,9 @@
+name = "cira-dashboard"
+compatibility_date = "2026-07-27"
+pages_build_output_dir = "dist"
+
+[vars]
+SUPABASE_TABLE = "audit_log_entries"
+REPORT_TIMEZONE = "America/New_York"
+PARSER_VERSION = "1.0.0"
+SYNC_BATCH_SIZE = "1000"

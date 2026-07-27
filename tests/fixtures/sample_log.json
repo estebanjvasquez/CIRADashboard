@@ -1,0 +1,13 @@
+[
+  {
+    "id": "c1f7a9d0-1234-4567-89ab-cdef01234567",
+    "fecha_creacion": "2026-07-27T14:30:00.000Z",
+    "session_id": "sess_991823",
+    "pregunta_usuario": "Dame informacion sobre la empresa TALLER COMERCIO , C.A",
+    "respuesta_ia": "{\"whereClause\":\"LOWER(name) LIKE LOWER('%taller comercio , c.a%')\",\"queryIntent\":\"COMPANY\",\"hasFilter\":true,\"needsClarification\":false,\"isSearchReady\":true,\"humanSummary\":\"Informacion sobre la empresa TALLER COMERCIO , C.A\"}",
+    "tokens_usados": 65,
+    "metadata": "{\"modelo\":\"Gemini-3-Flash\",\"origin\":\"https://camarapetrolera.org\",\"referer\":\"https://camarapetrolera.org/\",\"ejecucion_id\":\"9338\",\"x-forwarder-for\":\"190.122.223.131\",\"longitud_caracteres\":224}",
+    "error_log": null,
+    "output": "<div>Encontré <strong>1</strong> resultado. <a href=\"https://tallercomercio.com\">Sitio Web</a> RIF: J-12345678-9</div>"
+  }
+]
