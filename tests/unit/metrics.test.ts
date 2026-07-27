@@ -3,8 +3,8 @@ import { buildSummary } from '../../src/etl/metrics';
 import sampleLogs from '../fixtures/sample_log.json';
 
 describe('summary metrics', () => {
-  it('builds executive summary metrics from raw logs', () => {
-    const summary = buildSummary(sampleLogs, {
+  it('builds executive summary metrics from raw logs', async () => {
+    const summary = await buildSummary(sampleLogs, {
       ipHashSalt: 'test-salt',
       parserVersion: '1.0.0',
       reportTimezone: 'America/New_York',

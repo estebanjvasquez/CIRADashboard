@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { parseJsonFields, parseMetadata, parseOutputHtml } from './parsers';
 import type { ApiSummaryResponse, RawLogEntry } from '../shared/types';
 
@@ -8,10 +7,10 @@ interface SummaryOptions {
   reportTimezone: string;
 }
 
-export function buildSummary(
+export async function buildSummary(
   rows: RawLogEntry[],
   options: SummaryOptions,
-): ApiSummaryResponse {
+): Promise<ApiSummaryResponse> {
   const sessionIds = new Set<string>();
   const userHashes = new Set<string>();
   let totalTokens = 0;
@@ -30,7 +29,7 @@ export function buildSummary(
 
     const parsedMetadata = parseMetadata(row.metadata);
     if (parsedMetadata.ipUsuario) {
-      userHashes.add(hashIp(parsedMetadata.ipUsuario, options.ipHashSalt));
+      userHashes.add(await hashIp(parsedMetadata.ipUsuario, options.ipHashSalt));
     }
 
     const parsedHtml = parseOutputHtml(row.output);
@@ -55,8 +54,12 @@ export function buildSummary(
   };
 }
 
-function hashIp(ip: string, salt: string): string {
-  return createHash('sha256').update(`${ip}${salt}`).digest('hex');
+async function hashIp(ip: string, salt: string): Promise<string> {
+  const data = new TextEncoder().encode(`${ip}${salt}`);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 function ratio(value: number, total: number): number {

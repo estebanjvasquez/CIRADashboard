@@ -19,7 +19,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
   const rows = await fetchSupabaseRows(env, { from, to, limit });
   return Response.json(
-    buildSummary(rows, {
+    await buildSummary(rows, {
       ipHashSalt: env.IP_HASH_SALT,
       parserVersion: env.PARSER_VERSION,
       reportTimezone: env.REPORT_TIMEZONE,
