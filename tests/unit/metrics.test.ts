@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildSummary } from '../../src/etl/metrics';
+import {
+  buildCategoryRanking,
+  buildCompanyRanking,
+  buildIntentRanking,
+  buildQuality,
+  buildSummary,
+  buildTimeseries,
+} from '../../src/etl/metrics';
 import sampleLogs from '../fixtures/sample_log.json';
 
 describe('summary metrics', () => {
@@ -16,5 +23,34 @@ describe('summary metrics', () => {
     expect(summary.avgTokens).toBe(65);
     expect(summary.responsesWithWebsiteRate).toBe(1);
     expect(summary.parserVersion).toBe('1.0.0');
+  });
+
+  it('builds timeseries rows grouped by report timezone date', () => {
+    const timeseries = buildTimeseries(sampleLogs, {
+      parserVersion: '1.0.0',
+      reportTimezone: 'America/New_York',
+    });
+
+    expect(timeseries.rows).toEqual([
+      { date: '2026-07-27', queries: 1, tokens: 65, errors: 0, ambiguous: 0 },
+    ]);
+  });
+
+  it('builds quality metrics from raw logs', () => {
+    const quality = buildQuality(sampleLogs, { parserVersion: '1.0.0' });
+
+    expect(quality.totalRows).toBe(1);
+    expect(quality.errorRate).toBe(0);
+    expect(quality.responsesWithWebsiteRate).toBe(1);
+  });
+
+  it('builds rankings from parsed JSON and fallback company text', () => {
+    const intents = buildIntentRanking(sampleLogs, { parserVersion: '1.0.0' });
+    const companies = buildCompanyRanking(sampleLogs, { parserVersion: '1.0.0' });
+    const categories = buildCategoryRanking(sampleLogs, { parserVersion: '1.0.0' });
+
+    expect(intents.rows[0]).toMatchObject({ label: 'COMPANY', count: 1 });
+    expect(companies.rows[0].label).toContain('TALLER COMERCIO');
+    expect(categories.rows).toEqual([]);
   });
 });

@@ -1,10 +1,87 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
 
+interface Summary {
+  totalQueries: number;
+  uniqueSessions: number;
+  uniqueUsers: number;
+  avgTokens: number;
+  totalTokens: number;
+  ambiguityRate: number;
+  errorRate: number;
+  invalidJsonRows: number;
+  responsesWithWebsiteRate: number;
+  parserVersion: string;
+  generatedAt: string;
+}
+
+interface TimeseriesRow {
+  date: string;
+  queries: number;
+  tokens: number;
+  errors: number;
+  ambiguous: number;
+}
+
+interface RankingRow {
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+interface Quality {
+  totalRows: number;
+  ambiguousRows: number;
+  invalidJsonRows: number;
+  rowsWithWebsite: number;
+  errorRows: number;
+}
+
+interface DashboardData {
+  summary: Summary;
+  timeseries: { rows: TimeseriesRow[] };
+  intents: { rows: RankingRow[] };
+  companies: { rows: RankingRow[] };
+  categories: { rows: RankingRow[] };
+  locations: { rows: RankingRow[] };
+  quality: Quality;
+}
+
 function App() {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  const query = useMemo(() => {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const value = params.toString();
+    return value ? `?${value}` : '';
+  }, [from, to]);
+
+  useEffect(() => {
+    setStatus('loading');
+    Promise.all([
+      getJson<Summary>(`/summary${query}`),
+      getJson<{ rows: TimeseriesRow[] }>(`/timeseries${query}`),
+      getJson<{ rows: RankingRow[] }>(`/intents${query}`),
+      getJson<{ rows: RankingRow[] }>(`/top-companies${query}`),
+      getJson<{ rows: RankingRow[] }>(`/top-categories${query}`),
+      getJson<{ rows: RankingRow[] }>(`/locations${query}`),
+      getJson<Quality>(`/quality${query}`),
+    ])
+      .then(([summary, timeseries, intents, companies, categories, locations, quality]) => {
+        setData({ summary, timeseries, intents, companies, categories, locations, quality });
+        setStatus('ready');
+      })
+      .catch(() => setStatus('error'));
+  }, [query]);
+
   return (
     <main className="app-shell">
       <section className="toolbar">
@@ -12,19 +89,164 @@ function App() {
           <p className="eyebrow">CIRA</p>
           <h1>Bot Metrics Dashboard</h1>
         </div>
-        <a className="health-link" href={`${apiBaseUrl}/health`}>
-          API Health
-        </a>
+        <div className="filters">
+          <label>
+            Desde
+            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          </label>
+          <label>
+            Hasta
+            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          </label>
+          <a className="health-link" href={`${apiBaseUrl}/health`}>
+            API Health
+          </a>
+        </div>
       </section>
-      <section className="status-panel">
-        <h2>MVP setup ready</h2>
-        <p>
-          Cloudflare Access protects this hostname. The next API milestone is
-          connecting Supabase summary metrics from <code>audit_log_entries</code>.
-        </p>
-      </section>
+
+      {status === 'loading' && <section className="status-panel">Cargando metricas...</section>}
+      {status === 'error' && (
+        <section className="status-panel error">
+          No se pudieron cargar las metricas. Verifica la sesion de Cloudflare Access.
+        </section>
+      )}
+      {status === 'ready' && data && <Dashboard data={data} />}
     </main>
   );
+}
+
+function Dashboard({ data }: { data: DashboardData }) {
+  return (
+    <>
+      <section className="kpi-grid">
+        <MetricCard label="Consultas" value={formatNumber(data.summary.totalQueries)} />
+        <MetricCard label="Sesiones" value={formatNumber(data.summary.uniqueSessions)} />
+        <MetricCard label="Usuarios aprox." value={formatNumber(data.summary.uniqueUsers)} />
+        <MetricCard label="Tokens totales" value={formatNumber(data.summary.totalTokens)} />
+        <MetricCard label="Tokens prom." value={formatNumber(data.summary.avgTokens)} />
+        <MetricCard label="Ambiguedad" value={formatPercent(data.summary.ambiguityRate)} />
+        <MetricCard label="Errores" value={formatPercent(data.summary.errorRate)} />
+        <MetricCard label="Con web" value={formatPercent(data.summary.responsesWithWebsiteRate)} />
+      </section>
+
+      <section className="content-grid">
+        <ChartPanel title="Consultas por dia">
+          <DailyBars rows={data.timeseries.rows} />
+        </ChartPanel>
+        <ChartPanel title="Calidad del bot">
+          <QualityBars quality={data.quality} />
+        </ChartPanel>
+        <RankingPanel title="Empresas mas consultadas" rows={data.companies.rows} />
+        <RankingPanel title="Intenciones" rows={data.intents.rows} />
+        <RankingPanel title="Categorias detectadas" rows={data.categories.rows} />
+        <RankingPanel title="Ubicaciones detectadas" rows={data.locations.rows} />
+      </section>
+
+      <section className="status-panel">
+        <h2>Estado tecnico</h2>
+        <p>
+          {data.summary.invalidJsonRows} filas tienen JSON invalido. Parser{' '}
+          <code>{data.summary.parserVersion}</code>, generado{' '}
+          {new Date(data.summary.generatedAt).toLocaleString()}.
+        </p>
+      </section>
+    </>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="metric-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="panel">
+      <h2>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function DailyBars({ rows }: { rows: TimeseriesRow[] }) {
+  const max = Math.max(...rows.map((row) => row.queries), 1);
+  return (
+    <div className="bar-chart">
+      {rows.map((row) => (
+        <div className="bar-row" key={row.date}>
+          <span>{row.date}</span>
+          <div className="bar-track">
+            <div className="bar-fill" style={{ width: `${(row.queries / max) * 100}%` }} />
+          </div>
+          <strong>{formatNumber(row.queries)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QualityBars({ quality }: { quality: Quality }) {
+  const rows = [
+    { label: 'Ambiguas', value: quality.ambiguousRows },
+    { label: 'JSON invalido', value: quality.invalidJsonRows },
+    { label: 'Con web', value: quality.rowsWithWebsite },
+    { label: 'Errores', value: quality.errorRows },
+  ];
+  const max = Math.max(...rows.map((row) => row.value), 1);
+  return (
+    <div className="bar-chart">
+      {rows.map((row) => (
+        <div className="bar-row" key={row.label}>
+          <span>{row.label}</span>
+          <div className="bar-track">
+            <div className="bar-fill quality" style={{ width: `${(row.value / max) * 100}%` }} />
+          </div>
+          <strong>{formatNumber(row.value)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RankingPanel({ title, rows }: { title: string; rows: RankingRow[] }) {
+  return (
+    <section className="panel">
+      <h2>{title}</h2>
+      <div className="ranking-list">
+        {rows.length === 0 && <p className="muted">Sin datos detectados.</p>}
+        {rows.map((row) => (
+          <article className="ranking-row" key={row.label}>
+            <div>
+              <strong>{row.label}</strong>
+              <span>{formatPercent(row.percentage)}</span>
+            </div>
+            <em>{formatNumber(row.count)}</em>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+async function getJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error(`Request failed: ${path}`);
+  return response.json();
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('es-VE', { maximumFractionDigits: 2 }).format(value);
+}
+
+function formatPercent(value: number): string {
+  return new Intl.NumberFormat('es-VE', {
+    maximumFractionDigits: 1,
+    style: 'percent',
+  }).format(value);
 }
 
 createRoot(document.getElementById('root') as HTMLElement).render(

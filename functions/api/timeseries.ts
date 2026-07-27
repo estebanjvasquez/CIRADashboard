@@ -1,5 +1,5 @@
-import { buildSummary } from '../../src/etl/metrics';
 import { defaultCache } from '../../src/etl/cache';
+import { buildTimeseries } from '../../src/etl/metrics';
 import { fetchSupabaseRows } from '../../src/etl/supabase';
 
 interface Env {
@@ -9,26 +9,26 @@ interface Env {
   REPORT_TIMEZONE: string;
   PARSER_VERSION: string;
   SYNC_BATCH_SIZE: string;
-  IP_HASH_SALT: string;
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const url = new URL(request.url);
-  const from = url.searchParams.get('from');
-  const to = url.searchParams.get('to');
   const cache = defaultCache();
   const cacheKey = new Request(request.url, request);
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
-  const rows = await fetchSupabaseRows(env, { from, to });
+  const rows = await fetchSupabaseRows(env, {
+    from: url.searchParams.get('from'),
+    to: url.searchParams.get('to'),
+  });
+
   const response = Response.json(
-    await buildSummary(rows, {
-      ipHashSalt: env.IP_HASH_SALT,
+    buildTimeseries(rows, {
       parserVersion: env.PARSER_VERSION,
       reportTimezone: env.REPORT_TIMEZONE,
     }),
-    { headers: { 'Cache-Control': 'private, max-age=300' } },
+    { headers: { 'Cache-Control': 'private, max-age=900' } },
   );
 
   await cache.put(cacheKey, response.clone());

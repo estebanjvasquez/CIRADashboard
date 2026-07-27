@@ -10,9 +10,9 @@ export interface RawLogEntry {
   fecha_creacion: string;
   session_id: string;
   pregunta_usuario: string;
-  respuesta_ia: string | null;
+  respuesta_ia: string | Record<string, unknown> | null;
   tokens_usados: number;
-  metadata: string | null;
+  metadata: string | Record<string, unknown> | null;
   error_log: string | null;
   output: string | null;
 }
@@ -118,6 +118,46 @@ export interface ApiSummaryResponse {
   errorRate: number;
   invalidJsonRows: number;
   responsesWithWebsiteRate: number;
+  parserVersion: string;
+  generatedAt: string;
+}
+
+export interface ApiTimeseriesRow {
+  date: string;
+  queries: number;
+  tokens: number;
+  errors: number;
+  ambiguous: number;
+}
+
+export interface ApiTimeseriesResponse {
+  rows: ApiTimeseriesRow[];
+  parserVersion: string;
+  generatedAt: string;
+}
+
+export interface ApiQualityResponse {
+  totalRows: number;
+  ambiguousRows: number;
+  ambiguityRate: number;
+  errorRows: number;
+  errorRate: number;
+  invalidJsonRows: number;
+  invalidJsonRate: number;
+  rowsWithWebsite: number;
+  responsesWithWebsiteRate: number;
+  parserVersion: string;
+  generatedAt: string;
+}
+
+export interface ApiRankingRow {
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface ApiRankingResponse {
+  rows: ApiRankingRow[];
   parserVersion: string;
   generatedAt: string;
 }

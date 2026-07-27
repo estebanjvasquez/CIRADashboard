@@ -25,6 +25,12 @@ describe('ETL Parsers Unit Tests', () => {
     expect(parsed.ipUsuario).toBe('190.122.223.131');
   });
 
+  it('should parse common forwarded IP metadata variants', () => {
+    const parsed = parseMetadata('{"x-forwarded-for":"10.0.0.1, 10.0.0.2"}');
+    expect(parsed.isValid).toBe(true);
+    expect(parsed.ipUsuario).toBe('10.0.0.1');
+  });
+
   it('should extract indicators from output HTML', () => {
     const sample = sampleLogs[0];
     const parsed = parseOutputHtml(sample.output);
