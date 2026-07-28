@@ -15,6 +15,38 @@ export interface RawLogEntry {
   metadata: string | Record<string, unknown> | null;
   error_log: string | null;
   output: string | null;
+  resultado_tipo?: string | null;
+  needs_clarification?: boolean | null;
+  query_intent?: string | null;
+  where_clause?: string | null;
+  resultados_encontrados?: number | null;
+  tiempo_respuesta_ms?: number | null;
+  ip?: string | null;
+  user_agent?: string | null;
+  accept_language?: string | null;
+  ua_platform?: string | null;
+  ua_mobile?: string | null;
+  origin?: string | null;
+  referer?: string | null;
+  page_url?: string | null;
+  page_title?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  visitor_id?: string | null;
+  msg_index?: number | null;
+  widget_mode?: string | null;
+  screen?: string | null;
+  viewport?: string | null;
+  timezone?: string | null;
+  connection?: string | null;
+  wp_user_id?: number | null;
+  wp_user_role?: string | null;
+  geo_pais?: string | null;
+  geo_region?: string | null;
+  geo_ciudad?: string | null;
+  geo_isp?: string | null;
+  metadata_raw?: Record<string, unknown> | null;
 }
 
 /**

@@ -78,6 +78,51 @@ describe('summary metrics', () => {
     });
   });
 
+  it('uses flattened v_logs metadata fields when available', async () => {
+    const rows = [
+      {
+        ...sampleLogs[0],
+        id: 'flat-ok',
+        visitor_id: 'visitor-1',
+        ip: '198.51.100.10',
+        query_intent: 'SERVICE',
+        resultado_tipo: 'results',
+        needs_clarification: true,
+        geo_ciudad: 'Maracaibo',
+        geo_region: 'Zulia',
+        geo_pais: 'VE',
+        respuesta_ia: 'not json but classified result',
+      },
+      {
+        ...sampleLogs[0],
+        id: 'flat-ambiguous',
+        visitor_id: 'visitor-1',
+        query_intent: 'conversation',
+        resultado_tipo: 'conversation',
+        needs_clarification: true,
+        respuesta_ia: 'not json but classified conversation',
+      },
+    ];
+
+    const summary = await buildSummary(rows, {
+      ipHashSalt: 'test-salt',
+      parserVersion: '1.0.0',
+      reportTimezone: 'America/New_York',
+    });
+    const intents = buildIntentRanking(rows, { parserVersion: '1.0.0' });
+    const locations = buildLocationRanking(rows, { parserVersion: '1.0.0' });
+    const invalidJson = buildInvalidJsonDiagnostics(rows, { limit: 10, parserVersion: '1.0.0' });
+    const ambiguous = buildAmbiguousDiagnostics(rows, { limit: 10, parserVersion: '1.0.0' });
+
+    expect(summary.uniqueUsers).toBe(1);
+    expect(summary.ambiguityRate).toBe(0.5);
+    expect(intents.rows[0]).toMatchObject({ label: 'SERVICE', count: 1 });
+    expect(locations.rows[0]).toMatchObject({ label: 'MARACAIBO, ZULIA, VE', count: 1 });
+    expect(invalidJson.totalMatched).toBe(0);
+    expect(ambiguous.totalMatched).toBe(1);
+    expect(ambiguous.rows[0].reason).toContain('resultado_tipo=conversation');
+  });
+
   it('builds diagnostics for invalid JSON and ambiguous responses', () => {
     const rows = [
       ...sampleLogs,
