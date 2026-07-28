@@ -1,4 +1,4 @@
-import { defaultCache } from '../../src/etl/cache';
+import { enrichRowsWithIpGeo } from '../../src/etl/geo';
 import { buildLocationRanking } from '../../src/etl/metrics';
 import { fetchSupabaseRows } from '../../src/etl/supabase';
 
@@ -12,19 +12,14 @@ interface Env {
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const url = new URL(request.url);
-  const cache = defaultCache();
-  const cacheKey = new Request(request.url, request);
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
-
-  const rows = await fetchSupabaseRows(env, {
+  const rawRows = await fetchSupabaseRows(env, {
     from: url.searchParams.get('from'),
     to: url.searchParams.get('to'),
   });
+  const rows = await enrichRowsWithIpGeo(env, rawRows);
 
   const response = Response.json(buildLocationRanking(rows, { parserVersion: env.PARSER_VERSION }), {
-    headers: { 'Cache-Control': 'private, max-age=900' },
+    headers: { 'Cache-Control': 'no-store' },
   });
-  await cache.put(cacheKey, response.clone());
   return response;
 };

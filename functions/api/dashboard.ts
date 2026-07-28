@@ -11,6 +11,7 @@ import {
   buildTimeseries,
 } from '../../src/etl/metrics';
 import { fetchCatalogTerms, fetchSupabaseRows } from '../../src/etl/supabase';
+import { enrichRowsWithIpGeo } from '../../src/etl/geo';
 import type { ApiDashboardResponse } from '../../src/shared/types';
 
 interface Env {
@@ -25,13 +26,14 @@ interface Env {
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const url = new URL(request.url);
-  const [rows, catalog] = await Promise.all([
+  const [rawRows, catalog] = await Promise.all([
     fetchSupabaseRows(env, {
       from: url.searchParams.get('from'),
       to: url.searchParams.get('to'),
     }),
     fetchCatalogTerms(env),
   ]);
+  const rows = await enrichRowsWithIpGeo(env, rawRows);
 
   const sharedOptions = { parserVersion: env.PARSER_VERSION };
   const responseBody: ApiDashboardResponse = {

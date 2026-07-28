@@ -13,6 +13,14 @@ export interface SupabaseQueryOptions {
   limit: number;
 }
 
+export interface IpGeoRow {
+  ip: string;
+  pais: string | null;
+  region: string | null;
+  ciudad: string | null;
+  isp: string | null;
+}
+
 export async function fetchSupabaseRows(
   env: SupabaseEnv,
   options: Partial<SupabaseQueryOptions> = {},
@@ -49,11 +57,7 @@ async function fetchRowsFromTable(
   if (options.to) apiUrl.searchParams.append('fecha_creacion', `lte.${options.to}`);
 
   return fetch(apiUrl, {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: supabaseHeaders(env),
   });
 }
 
@@ -72,20 +76,55 @@ export async function fetchCatalogTerms(env: SupabaseEnv): Promise<{
   return { sectors, services };
 }
 
+export async function fetchIpGeoRows(env: SupabaseEnv, ips: string[]): Promise<IpGeoRow[]> {
+  if (!ips.length) return [];
+  const apiUrl = new URL('/rest/v1/ip_geo', env.SUPABASE_URL);
+  apiUrl.searchParams.set('select', 'ip,pais,region,ciudad,isp');
+  apiUrl.searchParams.set('ip', `in.(${ips.map(escapePostgrestInValue).join(',')})`);
+
+  const response = await fetch(apiUrl, { headers: supabaseHeaders(env) });
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function upsertIpGeoRows(env: SupabaseEnv, rows: IpGeoRow[]): Promise<void> {
+  if (!rows.length) return;
+  const apiUrl = new URL('/rest/v1/ip_geo', env.SUPABASE_URL);
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      ...supabaseHeaders(env),
+      Prefer: 'resolution=merge-duplicates',
+    },
+    body: JSON.stringify(rows),
+  });
+  if (!response.ok) {
+    throw new Error(`Supabase ip_geo upsert failed with ${response.status} ${response.statusText}`);
+  }
+}
+
 async function fetchNameColumn(env: SupabaseEnv, table: string): Promise<string[]> {
   const apiUrl = new URL(`/rest/v1/${table}`, env.SUPABASE_URL);
   apiUrl.searchParams.set('select', 'name');
   apiUrl.searchParams.set('limit', '5000');
 
   const response = await fetch(apiUrl, {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: supabaseHeaders(env),
   });
 
   if (!response.ok) return [];
   const rows = (await response.json()) as Array<{ name?: string }>;
   return rows.map((row) => row.name).filter((name): name is string => Boolean(name));
+}
+
+function supabaseHeaders(env: SupabaseEnv): Record<string, string> {
+  return {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+function escapePostgrestInValue(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
 }
