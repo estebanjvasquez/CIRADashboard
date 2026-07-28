@@ -90,16 +90,18 @@ export async function fetchIpGeoRows(env: SupabaseEnv, ips: string[]): Promise<I
 export async function upsertIpGeoRows(env: SupabaseEnv, rows: IpGeoRow[]): Promise<void> {
   if (!rows.length) return;
   const apiUrl = new URL('/rest/v1/ip_geo', env.SUPABASE_URL);
+  apiUrl.searchParams.set('on_conflict', 'ip');
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       ...supabaseHeaders(env),
-      Prefer: 'resolution=merge-duplicates',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
     },
     body: JSON.stringify(rows),
   });
   if (!response.ok) {
-    throw new Error(`Supabase ip_geo upsert failed with ${response.status} ${response.statusText}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`Supabase ip_geo upsert failed with ${response.status} ${response.statusText}: ${body}`);
   }
 }
 
@@ -117,13 +119,27 @@ async function fetchNameColumn(env: SupabaseEnv, table: string): Promise<string[
   return rows.map((row) => row.name).filter((name): name is string => Boolean(name));
 }
 
-function supabaseHeaders(env: SupabaseEnv): Record<string, string> {
-  return {
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+export function supabaseHeaders(env: { SUPABASE_SERVICE_ROLE_KEY?: string }): Record<string, string> {
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const headers: Record<string, string> = {
+    apikey: key,
     'Content-Type': 'application/json',
   };
+
+  if (isJwtKey(key)) {
+    headers.Authorization = `Bearer ${key}`;
+  }
+
+  return headers;
 }
+
+function isJwtKey(key: string): boolean {
+  return key.split('.').length === 3;
+}
+
+export const __test = {
+  supabaseHeaders,
+};
 
 function escapePostgrestInValue(value: string): string {
   return `"${value.replace(/"/g, '\\"')}"`;

@@ -31,16 +31,16 @@ describe('geo enrichment', () => {
       .fn()
       .mockResolvedValueOnce(Response.json([]))
       .mockResolvedValueOnce(
-        Response.json([
-          {
-            success: true,
-            ip: '8.8.8.8',
+        Response.json({
+          success: true,
+          ip: '8.8.8.8',
+          location: {
             country: 'Estados Unidos',
-            region: 'Virginia',
-            city: 'Ashburn',
-            connection: { isp: 'Google' },
+            state: 'California',
+            city: 'Mountain View',
           },
-        ][0]),
+          asn: { org: 'Google' },
+        }),
       )
       .mockResolvedValueOnce(new Response(null, { status: 201 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -49,11 +49,12 @@ describe('geo enrichment', () => {
 
     expect(rows[0]).toMatchObject({
       geo_pais: 'Estados Unidos',
-      geo_region: 'Virginia',
-      geo_ciudad: 'Ashburn',
+      geo_region: 'California',
+      geo_ciudad: 'Mountain View',
       geo_isp: 'Google',
     });
-    expect(String(fetchMock.mock.calls[1][0])).toBe('https://ipwho.is/8.8.8.8');
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://ipaddress.to/api/lookup/8.8.8.8');
+    expect(String(fetchMock.mock.calls[2][0])).toBe('https://example.supabase.co/rest/v1/ip_geo?on_conflict=ip');
   });
 
   it('resolves uncached IPs after already cached addresses', async () => {
@@ -64,10 +65,12 @@ describe('geo enrichment', () => {
         Response.json({
           success: true,
           ip: '1.1.1.1',
-          country: 'Australia',
-          region: 'Queensland',
-          city: 'Brisbane',
-          connection: { isp: 'Cloudflare' },
+          location: {
+            country: 'Australia',
+            state: 'Queensland',
+            city: 'Brisbane',
+          },
+          asn: { org: 'Cloudflare' },
         }),
       )
       .mockResolvedValueOnce(new Response(null, { status: 201 }));
@@ -79,6 +82,6 @@ describe('geo enrichment', () => {
     ]);
 
     expect(rows.find((row) => row.id === 'missing')).toMatchObject({ geo_ciudad: 'Brisbane' });
-    expect(String(fetchMock.mock.calls[1][0])).toBe('https://ipwho.is/1.1.1.1');
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://ipaddress.to/api/lookup/1.1.1.1');
   });
 });

@@ -11,8 +11,33 @@ interface IpWhoIsRow {
   connection?: { isp?: string };
 }
 
-const IP_API_BATCH_LIMIT = 100;
-const GEO_LOOKUP_CONCURRENCY = 20;
+interface FreeIpApiRow {
+  ipAddress?: string;
+  countryName?: string;
+  regionName?: string;
+  cityName?: string;
+  asnOrganization?: string;
+}
+
+interface IpAddressToRow {
+  success: boolean;
+  ip?: string;
+  location?: {
+    country?: string;
+    state?: string;
+    city?: string;
+  };
+  asn?: {
+    org?: string;
+    descr?: string;
+  };
+  company?: {
+    name?: string;
+  };
+}
+
+const IP_API_BATCH_LIMIT = 50;
+const GEO_LOOKUP_CONCURRENCY = 4;
 
 export async function enrichRowsWithIpGeo(env: SupabaseEnv, rows: RawLogEntry[]): Promise<RawLogEntry[]> {
   try {
@@ -27,10 +52,14 @@ export async function enrichRowsWithIpGeo(env: SupabaseEnv, rows: RawLogEntry[])
 
     let resolvedRows: IpGeoRow[] = [];
     if (missingIps.length) {
-      resolvedRows = await resolveIpWhoIs(missingIps);
+      resolvedRows = await resolveIpGeo(missingIps);
       // The dashboard must still show newly resolved locations when the optional
       // Supabase cache is unavailable or its table has not been created yet.
-      if (resolvedRows.length) await upsertIpGeoRows(env, resolvedRows).catch(() => undefined);
+      if (resolvedRows.length) {
+        await upsertIpGeoRows(env, resolvedRows).catch((error: unknown) => {
+          console.warn('Unable to persist IP geolocation cache', error);
+        });
+      }
     }
 
     const geoByIp = new Map<string, IpGeoRow>([
@@ -51,7 +80,8 @@ export async function enrichRowsWithIpGeo(env: SupabaseEnv, rows: RawLogEntry[])
         geo_isp: geo.isp,
       };
     });
-  } catch {
+  } catch (error) {
+    console.warn('Unable to enrich rows with IP geolocation', error);
     return rows;
   }
 }
@@ -115,8 +145,55 @@ function isPublicIpv6(value: string): boolean {
   );
 }
 
-async function resolveIpWhoIs(ips: string[]): Promise<IpGeoRow[]> {
+async function resolveIpGeo(ips: string[]): Promise<IpGeoRow[]> {
   const resolved = await mapWithConcurrency(ips, GEO_LOOKUP_CONCURRENCY, async (ip) => {
+    const ipAddressToRow = await resolveIpAddressTo(ip);
+    if (ipAddressToRow) return ipAddressToRow;
+    const freeIpApiRow = await resolveFreeIpApi(ip);
+    if (freeIpApiRow) return freeIpApiRow;
+    return resolveIpWhoIs(ip);
+  });
+
+  return resolved.filter((row): row is IpGeoRow => Boolean(row));
+}
+
+async function resolveIpAddressTo(ip: string): Promise<IpGeoRow | undefined> {
+  try {
+    const response = await fetch(`https://ipaddress.to/api/lookup/${encodeURIComponent(ip)}`);
+    if (!response.ok) return undefined;
+    const row = (await response.json()) as IpAddressToRow;
+    if (!row.success || !row.ip) return undefined;
+    return {
+      ip: row.ip,
+      pais: row.location?.country || null,
+      region: row.location?.state || null,
+      ciudad: row.location?.city || null,
+      isp: row.asn?.org || row.company?.name || row.asn?.descr || null,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveFreeIpApi(ip: string): Promise<IpGeoRow | undefined> {
+  try {
+    const response = await fetch(`https://free.freeipapi.com/api/json/${encodeURIComponent(ip)}`);
+    if (!response.ok) return undefined;
+    const row = (await response.json()) as FreeIpApiRow;
+    if (!row.ipAddress) return undefined;
+    return {
+      ip: row.ipAddress,
+      pais: row.countryName || null,
+      region: row.regionName || null,
+      ciudad: row.cityName || null,
+      isp: row.asnOrganization || null,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveIpWhoIs(ip: string): Promise<IpGeoRow | undefined> {
     try {
       const response = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`);
       if (!response.ok) return undefined;
@@ -132,9 +209,6 @@ async function resolveIpWhoIs(ips: string[]): Promise<IpGeoRow[]> {
     } catch {
       return undefined;
     }
-  });
-
-  return resolved.filter((row): row is IpGeoRow => Boolean(row));
 }
 
 async function mapWithConcurrency<T, R>(
