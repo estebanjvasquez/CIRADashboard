@@ -6,6 +6,7 @@ import {
   buildInvalidJsonDiagnostics,
   buildNoResultsDiagnostics,
   buildLocationRanking,
+  buildTimezoneRanking,
   buildQuality,
   buildSummary,
   buildTimeseries,
@@ -50,6 +51,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     companies: buildCompanyRanking(rows, sharedOptions),
     categories: buildCategoryRanking(rows, sharedOptions),
     locations: buildLocationRanking(rows, sharedOptions),
+    timezones: buildTimezoneRanking(rows, sharedOptions),
     quality: buildQuality(rows, sharedOptions),
     invalidJson: buildInvalidJsonDiagnostics(rows, {
       limit: 12,

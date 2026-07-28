@@ -83,6 +83,7 @@ interface DashboardData {
   companies: { rows: RankingRow[] };
   categories: { rows: RankingRow[] };
   locations: { rows: RankingRow[] };
+  timezones: { rows: RankingRow[] };
   quality: Quality;
   invalidJson: Diagnostics;
   ambiguous: Diagnostics;
@@ -170,7 +171,8 @@ function Dashboard({ data, query }: { data: DashboardData; query: string }) {
         <RankingPanel title="Empresas mas consultadas" rows={data.companies.rows} />
         <RankingPanel title="Intenciones" rows={data.intents.rows} />
         <RankingPanel title="Categorias detectadas" rows={data.categories.rows} />
-        <RankingPanel title="Ubicaciones detectadas" rows={data.locations.rows} />
+        <RankingPanel title="Ubicaciones por IP" rows={data.locations.rows} />
+        <RankingPanel title="Zonas horarias" rows={data.timezones.rows} />
       </section>
 
       <section className="status-panel">

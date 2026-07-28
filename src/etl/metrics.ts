@@ -1,4 +1,5 @@
 import { parseJsonFields, parseMetadata, parseOutputHtml } from './parsers';
+import { getRowIp } from './geo';
 import type {
   ApiQualityResponse,
   ApiDiagnosticsResponse,
@@ -149,6 +150,11 @@ export function buildLocationRanking(
   options: Pick<SummaryOptions, 'parserVersion'>,
 ): ApiRankingResponse {
   return buildRanking(rows, options, (row) => {
+    // Only use a location when it can be tied to the client IP from v_logs.
+    // This prevents company locations in bot output from being counted as visitor locations.
+    const ip = getRowIp(row);
+    if (!ip) return undefined;
+
     const flatLocation = [row.geo_ciudad, row.geo_region, row.geo_pais].filter(Boolean).join(', ');
     if (flatLocation) return flatLocation;
 
@@ -158,9 +164,15 @@ export function buildLocationRanking(
       .join(', ');
     if (userLocation) return userLocation;
 
-    const parsedHtml = parseOutputHtml(row.output);
-    return parsedHtml.estadoDetectado || parsedHtml.ciudadDetectada || parsedHtml.ubicacionDetectada;
+    return 'IP DETECTADA SIN GEOLOCALIZAR';
   });
+}
+
+export function buildTimezoneRanking(
+  rows: RawLogEntry[],
+  options: Pick<SummaryOptions, 'parserVersion'>,
+): ApiRankingResponse {
+  return buildRanking(rows, options, (row) => row.timezone || parseMetadata(row.metadata).timezone);
 }
 
 export function buildInvalidJsonDiagnostics(

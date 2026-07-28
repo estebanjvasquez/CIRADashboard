@@ -5,6 +5,7 @@ import {
   buildCompanyRanking,
   buildInvalidJsonDiagnostics,
   buildLocationRanking,
+  buildTimezoneRanking,
   buildNoResultsDiagnostics,
   buildIntentRanking,
   buildQuality,
@@ -76,6 +77,35 @@ describe('summary metrics', () => {
       label: 'CARACAS, DISTRITO CAPITAL, VE',
       count: 1,
     });
+  });
+
+  it('uses the v_logs IP column as the location source without exposing the address', () => {
+    const locations = buildLocationRanking(
+      [{ ...sampleLogs[0], ip: '8.8.8.8', output: '<div>Ubicacion: Maracaibo, Zulia</div>' }],
+      { parserVersion: '1.0.0' },
+    );
+
+    expect(locations.rows).toEqual([
+      expect.objectContaining({ label: 'IP DETECTADA SIN GEOLOCALIZAR', count: 1 }),
+    ]);
+    expect(locations.rows[0].label).not.toContain('8.8.8.8');
+    expect(locations.rows[0].label).not.toContain('MARACAIBO');
+  });
+
+  it('builds timezone ranking from flattened v_logs fields and metadata fallback', () => {
+    const timezones = buildTimezoneRanking(
+      [
+        { ...sampleLogs[0], timezone: 'America/Caracas' },
+        { ...sampleLogs[0], metadata: '{"timezone":"America/New_York"}' },
+        { ...sampleLogs[0], timezone: 'America/Caracas' },
+      ],
+      { parserVersion: '1.0.0' },
+    );
+
+    expect(timezones.rows).toEqual([
+      expect.objectContaining({ label: 'AMERICA/CARACAS', count: 2 }),
+      expect.objectContaining({ label: 'AMERICA/NEW_YORK', count: 1 }),
+    ]);
   });
 
   it('uses flattened v_logs metadata fields when available', async () => {

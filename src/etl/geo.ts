@@ -61,16 +61,23 @@ export function uniquePublicIps(rows: RawLogEntry[]): string[] {
   return Array.from(ips);
 }
 
-function getRowIp(row: RawLogEntry): string | undefined {
+export function getRowIp(row: RawLogEntry): string | undefined {
   const rawIp = row.ip || parseMetadata(row.metadata).ipUsuario;
   return firstIp(rawIp);
 }
 
 function firstIp(value: string | undefined): string | undefined {
-  return value
+  const candidate = value
     ?.split(',')
     .map((part) => part.trim())
     .find(Boolean);
+  if (!candidate) return undefined;
+
+  const bracketedIpv6 = candidate.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketedIpv6) return bracketedIpv6[1];
+
+  const ipv4WithPort = candidate.match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/);
+  return ipv4WithPort ? ipv4WithPort[1] : candidate.replace(/^['\"]|['\"]$/g, '');
 }
 
 function isPublicIp(value: string): boolean {

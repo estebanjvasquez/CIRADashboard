@@ -229,6 +229,7 @@ export interface ApiDashboardResponse {
   companies: ApiRankingResponse;
   categories: ApiRankingResponse;
   locations: ApiRankingResponse;
+  timezones: ApiRankingResponse;
   quality: ApiQualityResponse;
   invalidJson: ApiDiagnosticsResponse;
   ambiguous: ApiDiagnosticsResponse;

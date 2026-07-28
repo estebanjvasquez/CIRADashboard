@@ -20,9 +20,10 @@ describe('geo enrichment', () => {
       { ...sampleLogs[0], ip: '10.0.0.1' },
       { ...sampleLogs[0], ip: '172.20.0.1' },
       { ...sampleLogs[0], ip: '1.1.1.1, 10.0.0.1' },
+      { ...sampleLogs[0], ip: '8.8.4.4:443' },
     ]);
 
-    expect(ips).toEqual(['8.8.8.8', '1.1.1.1']);
+    expect(ips).toEqual(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
   });
 
   it('resolves missing IP geolocation and enriches rows in memory', async () => {
