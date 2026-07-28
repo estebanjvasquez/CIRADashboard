@@ -305,6 +305,7 @@ function ambiguityReason(row: RawLogEntry): string {
   const parsedHtml = parseOutputHtml(row.output);
   const reasons: string[] = [];
   if (parsedIa.needsClarification) reasons.push('needsClarification=true');
+  if (hasRawClarificationSignal(row.respuesta_ia)) reasons.push('respuesta_ia contiene aclaracion textual');
   if (parsedHtml.consultaAmbiguaOutput) reasons.push('output contiene "Te refieres"');
   if (parsedHtml.resultadosEncontrados > 1) reasons.push(`${parsedHtml.resultadosEncontrados} resultados encontrados`);
   return reasons.join(', ') || 'ambiguedad detectada';
@@ -316,17 +317,15 @@ function isRealInvalidJson(row: RawLogEntry): boolean {
   if (isLegacyIntentFormat(row.respuesta_ia)) return false;
   if (isEmptyQuestion(row)) return false;
   if (isLegitimateConversationalResponse(row.respuesta_ia)) return false;
+  if (hasRawClarificationSignal(row.respuesta_ia)) return false;
   return true;
 }
 
 function isRealAmbiguous(row: RawLogEntry): boolean {
   const parsedIa = parseJsonFields(row.respuesta_ia);
-  const parsedHtml = parseOutputHtml(row.output);
-  if (!parsedHtml.consultaAmbiguaOutput) return false;
-  if (parsedHtml.resultadosEncontrados <= 1) return false;
   if (isCompanyDetailQuestion(row.pregunta_usuario)) return false;
-  if (normalizeText(parsedIa.queryIntent) === 'company') return false;
-  return true;
+  if (parsedIa.needsClarification) return true;
+  return hasRawClarificationSignal(row.respuesta_ia);
 }
 
 function isLegacyIntentFormat(value: string | Record<string, unknown> | null): boolean {
@@ -346,6 +345,16 @@ function isLegitimateConversationalResponse(value: string | Record<string, unkno
     normalized.includes('no encontr') ||
     normalized.includes('fuera de mi ambito') ||
     normalized.includes('debe limitar su busqueda')
+  );
+}
+
+function hasRawClarificationSignal(value: string | Record<string, unknown> | null): boolean {
+  if (typeof value !== 'string') return false;
+  const normalized = normalizeText(value);
+  return (
+    normalized.includes('[needs_clarification') ||
+    /puede (referirse|interpretarse)/i.test(normalized) ||
+    /\ba\).*\bb\)/is.test(normalized)
   );
 }
 

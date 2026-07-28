@@ -64,14 +64,25 @@ OR pregunta_usuario ILIKE 'dame informaci%n sobre la empresa%'
 
 ## Definición CORRECTA de cada métrica (lo que SÍ debe contar)
 
-### Ambigüedad REAL
-Solo cuando el bot pidió desambiguar sobre una búsqueda genuina con varios candidatos:
+### Ambigüedad REAL  ⚠️ CORRECCIÓN IMPORTANTE
+**La señal `output` contiene `"Te refieres"` es INCORRECTA para medir ambigüedad.**
+Ese texto proviene de la tarjeta de empresa (intent COMPANY) y en el histórico el 100 % de
+esos casos tenían `resultados_encontrados = 1` → NO son ambigüedades. Por eso, si defines
+"ambigua" como `Te refieres` + `resultados > 1`, el resultado es **cero** (no porque no exista
+ambigüedad, sino porque está en otro lado).
+
+La ambigüedad real se manifiesta como una **petición de aclaración en texto** (el bot ofrece
+un menú "A)/B)" o marca `needs_clarification`). En el histórico eso quedó guardado dentro del
+listado de "JSON inválido", no en "ambiguas". Detéctala así:
 ```sql
-output ILIKE '%Te refieres%'
-AND resultados_encontrados > 1
-AND pregunta_usuario NOT ILIKE 'dame informaci%n sobre la empresa%'
-AND query_intent <> 'COMPANY'         -- COMPANY con >1 puede seguir siendo válido; ajustar según criterio
+   needs_clarification_ai = TRUE
+OR respuesta_ia ~* 'puede (referirse|interpretarse)'
+OR respuesta_ia ~* '\mA\).*\mB\)'          -- ofrece opciones A) ... B) ...
+OR respuesta_ia ILIKE '%[NEEDS_CLARIFICATION%'
 ```
+En el dataset histórico esto da **≈ 25 casos reales** de ambigüedad (todos del comportamiento
+de menú "A/B"). Nota: el prompt MEJORADO prohíbe ese menú (regla ANTI-MENÚ + CASO B), así que
+esta métrica debería tender a 0 con el bot nuevo — pero se mide con ESTA señal, no con "Te refieres".
 
 ### JSON inválido REAL
 Solo cuando el agente **intentó** una búsqueda (no fue conversación) y el JSON quedó roto

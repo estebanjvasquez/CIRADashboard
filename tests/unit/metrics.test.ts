@@ -98,6 +98,12 @@ describe('summary metrics', () => {
       { ...sampleLogs[0], id: 'no-results', respuesta_ia: 'No encontramos empresas con ese criterio.' },
       {
         ...sampleLogs[0],
+        id: 'clarification-menu',
+        pregunta_usuario: 'servicios petroleros',
+        respuesta_ia: 'Puede referirse a A) Perforacion B) Transporte',
+      },
+      {
+        ...sampleLogs[0],
         id: 'real-invalid',
         pregunta_usuario: "Busca KALA'S, C.A.",
         respuesta_ia: '{"whereClause":"LOWER(name) LIKE LOWER("%KALA\\S%")"}',
@@ -131,15 +137,16 @@ describe('summary metrics', () => {
       {
         ...sampleLogs[0],
         id: 'company-intent',
+        pregunta_usuario: 'acme',
         respuesta_ia: '{"queryIntent":"COMPANY","needsClarification":true}',
-        output: '<div>Te refieres a alguna de estas empresas? Encontré <strong>3</strong></div>',
+        output: '<div>Te refieres a alguna de estas empresas? Encontré <strong>1</strong></div>',
       },
       {
         ...sampleLogs[0],
         id: 'real-ambiguous',
         pregunta_usuario: 'empresas de servicios petroleros',
-        respuesta_ia: '{"queryIntent":"SECTOR","needsClarification":true}',
-        output: '<div>Te refieres a alguna de estas empresas? Encontré <strong>4</strong></div>',
+        respuesta_ia: 'Su consulta puede referirse a A) Servicios de perforacion B) Servicios de transporte',
+        output: '<div>No hay tarjeta de empresa</div>',
       },
     ];
 
@@ -148,8 +155,8 @@ describe('summary metrics', () => {
       parserVersion: '1.0.0',
     });
 
-    expect(ambiguous.totalMatched).toBe(1);
-    expect(ambiguous.rows[0].logId).toBe('real-ambiguous');
+    expect(ambiguous.totalMatched).toBe(2);
+    expect(ambiguous.rows.map((row) => row.logId)).toEqual(['company-intent', 'real-ambiguous']);
   });
 
   it('exports diagnostics as csv', () => {
