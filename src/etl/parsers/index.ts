@@ -43,6 +43,10 @@ export function parseMetadata(rawMetadata: string | Record<string, unknown> | nu
         'ip_usuario',
         'ip',
       ]),
+      country: firstString(data, ['cf-ipcountry', 'cf_ipcountry', 'country', 'pais', 'geo_country']),
+      region: firstString(data, ['region', 'region_name', 'state', 'estado', 'geo_region']),
+      city: firstString(data, ['city', 'ciudad', 'geo_city']),
+      timezone: firstString(data, ['timezone', 'time_zone', 'tz']),
       longitudCaracteres: asNumber(data.longitud_caracteres),
     };
   } catch {

@@ -41,6 +41,10 @@ export interface ParsedMetadata {
   ejecucionId?: string;
   ipUsuario?: string;
   ipHash?: string;
+  country?: string;
+  region?: string;
+  city?: string;
+  timezone?: string;
   longitudCaracteres?: number;
 }
 
@@ -213,6 +217,18 @@ export interface ApiNoResultsRow {
 export interface ApiNoResultsResponse {
   rows: ApiNoResultsRow[];
   totalMatched: number;
+  parserVersion: string;
+  generatedAt: string;
+}
+
+export interface ApiMetadataCoverageRow {
+  field: string;
+  count: number;
+}
+
+export interface ApiMetadataCoverageResponse {
+  rows: ApiMetadataCoverageRow[];
+  totalRows: number;
   parserVersion: string;
   generatedAt: string;
 }

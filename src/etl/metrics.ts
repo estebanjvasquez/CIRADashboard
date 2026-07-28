@@ -3,6 +3,7 @@ import type {
   ApiQualityResponse,
   ApiDiagnosticsResponse,
   ApiNoResultsResponse,
+  ApiMetadataCoverageResponse,
   ApiRankingResponse,
   ApiSummaryResponse,
   ApiTimeseriesResponse,
@@ -147,6 +148,12 @@ export function buildLocationRanking(
   options: Pick<SummaryOptions, 'parserVersion'>,
 ): ApiRankingResponse {
   return buildRanking(rows, options, (row) => {
+    const parsedMetadata = parseMetadata(row.metadata);
+    const userLocation = [parsedMetadata.city, parsedMetadata.region, parsedMetadata.country]
+      .filter(Boolean)
+      .join(', ');
+    if (userLocation) return userLocation;
+
     const parsedHtml = parseOutputHtml(row.output);
     return parsedHtml.estadoDetectado || parsedHtml.ciudadDetectada || parsedHtml.ubicacionDetectada;
   });
@@ -233,6 +240,29 @@ export function buildNoResultsDiagnostics(
   };
 }
 
+export function buildMetadataCoverage(
+  rows: RawLogEntry[],
+  options: Pick<SummaryOptions, 'parserVersion'>,
+): ApiMetadataCoverageResponse {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const metadata = parseMetadataObject(row.metadata);
+    if (!metadata) continue;
+    for (const key of Object.keys(metadata)) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  return {
+    rows: Array.from(counts.entries())
+      .sort((left, right) => right[1] - left[1])
+      .map(([field, count]) => ({ field, count })),
+    totalRows: rows.length,
+    parserVersion: options.parserVersion,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 async function hashIp(ip: string, salt: string): Promise<string> {
   const data = new TextEncoder().encode(`${ip}${salt}`);
   const digest = await crypto.subtle.digest('SHA-256', data);
@@ -300,6 +330,17 @@ function normalizeLabel(label: string | undefined): string | undefined {
     .trim();
   if (!cleaned || cleaned.length < 2 || cleaned === 'UNKNOWN') return undefined;
   return cleaned.toUpperCase();
+}
+
+function parseMetadataObject(value: string | Record<string, unknown> | null): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  if (typeof value !== 'string') return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function localDate(timestamp: string, timezone: string): string {

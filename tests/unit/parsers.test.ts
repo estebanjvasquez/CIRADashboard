@@ -26,9 +26,14 @@ describe('ETL Parsers Unit Tests', () => {
   });
 
   it('should parse common forwarded IP metadata variants', () => {
-    const parsed = parseMetadata('{"x-forwarded-for":"10.0.0.1, 10.0.0.2"}');
+    const parsed = parseMetadata(
+      '{"x-forwarded-for":"10.0.0.1, 10.0.0.2","cf-ipcountry":"VE","city":"Caracas","region":"Distrito Capital"}',
+    );
     expect(parsed.isValid).toBe(true);
     expect(parsed.ipUsuario).toBe('10.0.0.1');
+    expect(parsed.country).toBe('VE');
+    expect(parsed.city).toBe('Caracas');
+    expect(parsed.region).toBe('Distrito Capital');
   });
 
   it('should extract indicators from output HTML', () => {

@@ -4,6 +4,7 @@ import {
   buildAmbiguousDiagnostics,
   buildCompanyRanking,
   buildInvalidJsonDiagnostics,
+  buildLocationRanking,
   buildNoResultsDiagnostics,
   buildIntentRanking,
   buildQuality,
@@ -57,6 +58,24 @@ describe('summary metrics', () => {
     expect(intents.rows[0]).toMatchObject({ label: 'COMPANY', count: 1 });
     expect(companies.rows[0].label).toContain('TALLER COMERCIO');
     expect(categories.rows).toEqual([]);
+  });
+
+  it('builds location ranking from user metadata before company output location', () => {
+    const locations = buildLocationRanking(
+      [
+        {
+          ...sampleLogs[0],
+          metadata:
+            '{"x-forwarded-for":"10.0.0.1","cf-ipcountry":"VE","city":"Caracas","region":"Distrito Capital"}',
+        },
+      ],
+      { parserVersion: '1.0.0' },
+    );
+
+    expect(locations.rows[0]).toMatchObject({
+      label: 'CARACAS, DISTRITO CAPITAL, VE',
+      count: 1,
+    });
   });
 
   it('builds diagnostics for invalid JSON and ambiguous responses', () => {
