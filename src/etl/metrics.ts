@@ -1,6 +1,7 @@
 import { parseJsonFields, parseMetadata, parseOutputHtml } from './parsers';
 import type {
   ApiQualityResponse,
+  ApiDiagnosticsResponse,
   ApiRankingResponse,
   ApiSummaryResponse,
   ApiTimeseriesResponse,
@@ -152,6 +153,40 @@ export function buildLocationRanking(
   });
 }
 
+export function buildInvalidJsonDiagnostics(
+  rows: RawLogEntry[],
+  options: Pick<SummaryOptions, 'parserVersion'> & { limit: number },
+): ApiDiagnosticsResponse {
+  const matched = rows.filter((row) => !parseJsonFields(row.respuesta_ia).isValid);
+
+  return {
+    rows: matched.slice(0, options.limit).map((row) => diagnosticRow(row, invalidJsonReason(row))),
+    totalMatched: matched.length,
+    limit: options.limit,
+    parserVersion: options.parserVersion,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+export function buildAmbiguousDiagnostics(
+  rows: RawLogEntry[],
+  options: Pick<SummaryOptions, 'parserVersion'> & { limit: number },
+): ApiDiagnosticsResponse {
+  const matched = rows.filter((row) => {
+    const parsedIa = parseJsonFields(row.respuesta_ia);
+    const parsedHtml = parseOutputHtml(row.output);
+    return Boolean(parsedIa.needsClarification || parsedHtml.consultaAmbiguaOutput);
+  });
+
+  return {
+    rows: matched.slice(0, options.limit).map((row) => diagnosticRow(row, ambiguityReason(row))),
+    totalMatched: matched.length,
+    limit: options.limit,
+    parserVersion: options.parserVersion,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 async function hashIp(ip: string, salt: string): Promise<string> {
   const data = new TextEncoder().encode(`${ip}${salt}`);
   const digest = await crypto.subtle.digest('SHA-256', data);
@@ -233,4 +268,74 @@ function localDate(timestamp: string, timezone: string): string {
   const month = parts.find((part) => part.type === 'month')?.value ?? '00';
   const day = parts.find((part) => part.type === 'day')?.value ?? '00';
   return `${year}-${month}-${day}`;
+}
+
+function diagnosticRow(row: RawLogEntry, reason: string) {
+  const parsedIa = parseJsonFields(row.respuesta_ia);
+  const parsedHtml = parseOutputHtml(row.output);
+
+  return {
+    logId: row.id,
+    fechaCreacion: row.fecha_creacion,
+    sessionId: row.session_id,
+    preguntaUsuario: truncate(row.pregunta_usuario, 240) ?? '',
+    respuestaIaPreview: previewValue(row.respuesta_ia),
+    outputPreview: previewHtml(row.output),
+    queryIntent: parsedIa.queryIntent,
+    whereClause: truncate(parsedIa.whereClause, 220),
+    humanSummary: truncate(parsedIa.humanSummary, 220),
+    resultadosEncontrados: parsedHtml.resultadosEncontrados,
+    needsClarificationAi: parsedIa.needsClarification,
+    consultaAmbiguaOutput: parsedHtml.consultaAmbiguaOutput,
+    reason,
+  };
+}
+
+function invalidJsonReason(row: RawLogEntry): string {
+  if (!row.respuesta_ia) return 'respuesta_ia vacio';
+  if (typeof row.respuesta_ia !== 'string') return 'respuesta_ia no es string JSON';
+  const value = row.respuesta_ia.trim();
+  if (!value) return 'respuesta_ia vacio';
+  if (/^```/.test(value)) return 'JSON envuelto en Markdown';
+  if (!/^[{[]/.test(value)) return 'texto antes del JSON o respuesta en lenguaje natural';
+  try {
+    JSON.parse(value);
+    return 'schema inesperado';
+  } catch (error) {
+    return error instanceof Error ? truncate(error.message, 120) || 'JSON.parse fallo' : 'JSON.parse fallo';
+  }
+}
+
+function ambiguityReason(row: RawLogEntry): string {
+  const parsedIa = parseJsonFields(row.respuesta_ia);
+  const parsedHtml = parseOutputHtml(row.output);
+  const reasons: string[] = [];
+  if (parsedIa.needsClarification) reasons.push('needsClarification=true');
+  if (parsedHtml.consultaAmbiguaOutput) reasons.push('output contiene "Te refieres"');
+  if (parsedHtml.resultadosEncontrados > 1) reasons.push(`${parsedHtml.resultadosEncontrados} resultados encontrados`);
+  return reasons.join(', ') || 'ambiguedad detectada';
+}
+
+function previewValue(value: string | Record<string, unknown> | null): string | undefined {
+  if (!value) return undefined;
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return truncate(text.replace(/\s+/g, ' ').trim(), 300);
+}
+
+function previewHtml(html: string | null): string | undefined {
+  if (!html) return undefined;
+  return truncate(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    300,
+  );
+}
+
+function truncate(value: string | undefined, max: number): string | undefined {
+  if (!value) return undefined;
+  return value.length > max ? `${value.slice(0, max - 1)}...` : value;
 }

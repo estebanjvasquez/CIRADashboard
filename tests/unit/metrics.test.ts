@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCategoryRanking,
+  buildAmbiguousDiagnostics,
   buildCompanyRanking,
+  buildInvalidJsonDiagnostics,
   buildIntentRanking,
   buildQuality,
   buildSummary,
@@ -52,5 +54,37 @@ describe('summary metrics', () => {
     expect(intents.rows[0]).toMatchObject({ label: 'COMPANY', count: 1 });
     expect(companies.rows[0].label).toContain('TALLER COMERCIO');
     expect(categories.rows).toEqual([]);
+  });
+
+  it('builds diagnostics for invalid JSON and ambiguous responses', () => {
+    const rows = [
+      ...sampleLogs,
+      {
+        ...sampleLogs[0],
+        id: 'invalid-json',
+        respuesta_ia: '```json {"bad": true}',
+      },
+      {
+        ...sampleLogs[0],
+        id: 'ambiguous',
+        respuesta_ia:
+          '{"queryIntent":"COMPANY","needsClarification":true,"humanSummary":"Consulta ambigua"}',
+        output: '<div>Te refieres a alguna de estas empresas? Encontré <strong>3</strong></div>',
+      },
+    ];
+
+    const invalidJson = buildInvalidJsonDiagnostics(rows, {
+      limit: 10,
+      parserVersion: '1.0.0',
+    });
+    const ambiguous = buildAmbiguousDiagnostics(rows, {
+      limit: 10,
+      parserVersion: '1.0.0',
+    });
+
+    expect(invalidJson.totalMatched).toBe(1);
+    expect(invalidJson.rows[0].reason).toBe('JSON envuelto en Markdown');
+    expect(ambiguous.totalMatched).toBe(1);
+    expect(ambiguous.rows[0].reason).toContain('needsClarification=true');
   });
 });

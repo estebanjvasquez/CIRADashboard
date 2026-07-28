@@ -40,6 +40,27 @@ interface Quality {
   errorRows: number;
 }
 
+interface DiagnosticRow {
+  logId: string;
+  fechaCreacion: string;
+  sessionId: string;
+  preguntaUsuario: string;
+  respuestaIaPreview?: string;
+  outputPreview?: string;
+  queryIntent?: string;
+  whereClause?: string;
+  humanSummary?: string;
+  resultadosEncontrados: number;
+  needsClarificationAi?: boolean;
+  consultaAmbiguaOutput: boolean;
+  reason: string;
+}
+
+interface Diagnostics {
+  rows: DiagnosticRow[];
+  totalMatched: number;
+}
+
 interface DashboardData {
   summary: Summary;
   timeseries: { rows: TimeseriesRow[] };
@@ -48,6 +69,8 @@ interface DashboardData {
   categories: { rows: RankingRow[] };
   locations: { rows: RankingRow[] };
   quality: Quality;
+  invalidJson: Diagnostics;
+  ambiguous: Diagnostics;
 }
 
 function App() {
@@ -74,11 +97,35 @@ function App() {
       getJson<{ rows: RankingRow[] }>(`/top-categories${query}`),
       getJson<{ rows: RankingRow[] }>(`/locations${query}`),
       getJson<Quality>(`/quality${query}`),
+      getJson<Diagnostics>(`/diagnostics/invalid-json${appendLimit(query)}`),
+      getJson<Diagnostics>(`/diagnostics/ambiguous${appendLimit(query)}`),
     ])
-      .then(([summary, timeseries, intents, companies, categories, locations, quality]) => {
-        setData({ summary, timeseries, intents, companies, categories, locations, quality });
+      .then(
+        ([
+          summary,
+          timeseries,
+          intents,
+          companies,
+          categories,
+          locations,
+          quality,
+          invalidJson,
+          ambiguous,
+        ]) => {
+          setData({
+            summary,
+            timeseries,
+            intents,
+            companies,
+            categories,
+            locations,
+            quality,
+            invalidJson,
+            ambiguous,
+          });
         setStatus('ready');
-      })
+      },
+      )
       .catch(() => setStatus('error'));
   }, [query]);
 
@@ -115,6 +162,11 @@ function App() {
   );
 }
 
+function appendLimit(query: string): string {
+  const separator = query ? '&' : '?';
+  return `${query}${separator}limit=12`;
+}
+
 function Dashboard({ data }: { data: DashboardData }) {
   return (
     <>
@@ -149,6 +201,21 @@ function Dashboard({ data }: { data: DashboardData }) {
           <code>{data.summary.parserVersion}</code>, generado{' '}
           {new Date(data.summary.generatedAt).toLocaleString()}.
         </p>
+      </section>
+
+      <section className="diagnostics-grid">
+        <DiagnosticPanel
+          title="Diagnostico JSON invalido"
+          total={data.invalidJson.totalMatched}
+          rows={data.invalidJson.rows}
+          mode="json"
+        />
+        <DiagnosticPanel
+          title="Diagnostico respuestas ambiguas"
+          total={data.ambiguous.totalMatched}
+          rows={data.ambiguous.rows}
+          mode="ambiguous"
+        />
       </section>
     </>
   );
@@ -225,6 +292,55 @@ function RankingPanel({ title, rows }: { title: string; rows: RankingRow[] }) {
               <span>{formatPercent(row.percentage)}</span>
             </div>
             <em>{formatNumber(row.count)}</em>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DiagnosticPanel({
+  title,
+  total,
+  rows,
+  mode,
+}: {
+  title: string;
+  total: number;
+  rows: DiagnosticRow[];
+  mode: 'json' | 'ambiguous';
+}) {
+  return (
+    <section className="panel diagnostics-panel">
+      <h2>{title}</h2>
+      <p className="muted">{formatNumber(total)} filas detectadas. Mostrando muestra reciente.</p>
+      <div className="diagnostic-list">
+        {rows.length === 0 && <p className="muted">Sin casos para revisar.</p>}
+        {rows.map((row) => (
+          <article className="diagnostic-row" key={`${mode}-${row.logId}`}>
+            <div className="diagnostic-head">
+              <strong>{new Date(row.fechaCreacion).toLocaleString()}</strong>
+              <span>{row.reason}</span>
+            </div>
+            <p>{row.preguntaUsuario}</p>
+            {mode === 'json' && row.respuestaIaPreview && <code>{row.respuestaIaPreview}</code>}
+            {mode === 'ambiguous' && (
+              <dl>
+                <div>
+                  <dt>Intent</dt>
+                  <dd>{row.queryIntent || 'N/D'}</dd>
+                </div>
+                <div>
+                  <dt>Resultados</dt>
+                  <dd>{formatNumber(row.resultadosEncontrados)}</dd>
+                </div>
+                <div>
+                  <dt>Resumen</dt>
+                  <dd>{row.humanSummary || 'N/D'}</dd>
+                </div>
+              </dl>
+            )}
+            {row.outputPreview && <p className="muted">{row.outputPreview}</p>}
           </article>
         ))}
       </div>

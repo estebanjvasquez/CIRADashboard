@@ -125,6 +125,13 @@ code {
   padding-top: 18px;
 }
 
+.diagnostics-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 24px;
+}
+
 .panel {
   border: 1px solid #d8ddd4;
   min-height: 260px;
@@ -197,6 +204,81 @@ code {
   font-weight: 700;
 }
 
+.diagnostics-panel {
+  min-height: 360px;
+}
+
+.diagnostic-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.diagnostic-row {
+  border-top: 1px solid #e2e6df;
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.diagnostic-row p {
+  color: #17201b;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 0;
+}
+
+.diagnostic-row code {
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diagnostic-head {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.diagnostic-head strong {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.diagnostic-head span {
+  color: #8a5a2d;
+  font-size: 12px;
+  text-align: right;
+}
+
+.diagnostic-row dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.diagnostic-row dl div {
+  display: grid;
+  gap: 3px;
+}
+
+.diagnostic-row dt {
+  color: #647064;
+  font-size: 11px;
+}
+
+.diagnostic-row dd {
+  font-size: 12px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     padding: 20px;
@@ -221,6 +303,10 @@ code {
   .content-grid {
     grid-template-columns: 1fr;
   }
+
+  .diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 520px) {
@@ -230,5 +316,18 @@ code {
 
   .bar-row {
     grid-template-columns: 84px minmax(72px, 1fr) 44px;
+  }
+
+  .diagnostic-head,
+  .diagnostic-row dl {
+    grid-template-columns: 1fr;
+  }
+
+  .diagnostic-head {
+    display: grid;
+  }
+
+  .diagnostic-head span {
+    text-align: left;
   }
 }

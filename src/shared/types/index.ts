@@ -161,3 +161,27 @@ export interface ApiRankingResponse {
   parserVersion: string;
   generatedAt: string;
 }
+
+export interface ApiDiagnosticRow {
+  logId: string;
+  fechaCreacion: string;
+  sessionId: string;
+  preguntaUsuario: string;
+  respuestaIaPreview?: string;
+  outputPreview?: string;
+  queryIntent?: string;
+  whereClause?: string;
+  humanSummary?: string;
+  resultadosEncontrados: number;
+  needsClarificationAi?: boolean;
+  consultaAmbiguaOutput: boolean;
+  reason: string;
+}
+
+export interface ApiDiagnosticsResponse {
+  rows: ApiDiagnosticRow[];
+  totalMatched: number;
+  limit: number;
+  parserVersion: string;
+  generatedAt: string;
+}
