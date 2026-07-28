@@ -196,5 +196,23 @@ export interface ApiDashboardResponse {
   quality: ApiQualityResponse;
   invalidJson: ApiDiagnosticsResponse;
   ambiguous: ApiDiagnosticsResponse;
+  noResults: ApiNoResultsResponse;
+  generatedAt: string;
+}
+
+export interface ApiNoResultsRow {
+  term: string;
+  count: number;
+  coincidesSector: boolean;
+  coincidesService: boolean;
+  priority: 'BUG_REAL' | 'SINONIMO' | 'RUIDO';
+  action: string;
+  sampleQuestion: string;
+}
+
+export interface ApiNoResultsResponse {
+  rows: ApiNoResultsRow[];
+  totalMatched: number;
+  parserVersion: string;
   generatedAt: string;
 }

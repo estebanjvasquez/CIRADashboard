@@ -61,6 +61,21 @@ interface Diagnostics {
   totalMatched: number;
 }
 
+interface NoResultsRow {
+  term: string;
+  count: number;
+  coincidesSector: boolean;
+  coincidesService: boolean;
+  priority: 'BUG_REAL' | 'SINONIMO' | 'RUIDO';
+  action: string;
+  sampleQuestion: string;
+}
+
+interface NoResults {
+  rows: NoResultsRow[];
+  totalMatched: number;
+}
+
 interface DashboardData {
   summary: Summary;
   timeseries: { rows: TimeseriesRow[] };
@@ -71,6 +86,7 @@ interface DashboardData {
   quality: Quality;
   invalidJson: Diagnostics;
   ambiguous: Diagnostics;
+  noResults: NoResults;
 }
 
 function App() {
@@ -167,6 +183,11 @@ function Dashboard({ data, query }: { data: DashboardData; query: string }) {
       </section>
 
       <section className="diagnostics-grid">
+        <NoResultsPanel
+          total={data.noResults.totalMatched}
+          rows={data.noResults.rows}
+          downloadUrl={diagnosticCsvUrl('/diagnostics/no-results.csv', query)}
+        />
         <DiagnosticPanel
           title="Diagnostico JSON invalido"
           total={data.invalidJson.totalMatched}
@@ -183,6 +204,58 @@ function Dashboard({ data, query }: { data: DashboardData; query: string }) {
         />
       </section>
     </>
+  );
+}
+
+function NoResultsPanel({
+  total,
+  rows,
+  downloadUrl,
+}: {
+  total: number;
+  rows: NoResultsRow[];
+  downloadUrl: string;
+}) {
+  return (
+    <section className="panel diagnostics-panel">
+      <div className="panel-title-row">
+        <div>
+          <h2>Consultas sin resultado</h2>
+          <p className="muted">
+            {formatNumber(total)} casos detectados. Priorizadas por bug real o sinonimo.
+          </p>
+        </div>
+        <a className="download-link" href={downloadUrl}>
+          Descargar CSV
+        </a>
+      </div>
+      <div className="diagnostic-list">
+        {rows.length === 0 && <p className="muted">Sin consultas sin resultado.</p>}
+        {rows.map((row) => (
+          <article className="diagnostic-row" key={row.term}>
+            <div className="diagnostic-head">
+              <strong>{row.term}</strong>
+              <span>{row.priority}</span>
+            </div>
+            <dl>
+              <div>
+                <dt>Veces</dt>
+                <dd>{formatNumber(row.count)}</dd>
+              </div>
+              <div>
+                <dt>Catalogo</dt>
+                <dd>{row.coincidesSector || row.coincidesService ? 'Coincide' : 'No coincide'}</dd>
+              </div>
+              <div>
+                <dt>Accion</dt>
+                <dd>{row.action}</dd>
+              </div>
+            </dl>
+            <p className="muted">{row.sampleQuestion}</p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

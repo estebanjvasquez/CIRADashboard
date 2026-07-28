@@ -40,3 +40,32 @@ export async function fetchSupabaseRows(
 
   return response.json();
 }
+
+export async function fetchCatalogTerms(env: SupabaseEnv): Promise<{
+  sectors: string[];
+  services: string[];
+}> {
+  const [sectors, services] = await Promise.all([
+    fetchNameColumn(env, 'sectors'),
+    fetchNameColumn(env, 'services'),
+  ]);
+  return { sectors, services };
+}
+
+async function fetchNameColumn(env: SupabaseEnv, table: string): Promise<string[]> {
+  const apiUrl = new URL(`/rest/v1/${table}`, env.SUPABASE_URL);
+  apiUrl.searchParams.set('select', 'name');
+  apiUrl.searchParams.set('limit', '5000');
+
+  const response = await fetch(apiUrl, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) return [];
+  const rows = (await response.json()) as Array<{ name?: string }>;
+  return rows.map((row) => row.name).filter((name): name is string => Boolean(name));
+}

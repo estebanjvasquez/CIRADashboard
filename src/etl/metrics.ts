@@ -2,6 +2,7 @@ import { parseJsonFields, parseMetadata, parseOutputHtml } from './parsers';
 import type {
   ApiQualityResponse,
   ApiDiagnosticsResponse,
+  ApiNoResultsResponse,
   ApiRankingResponse,
   ApiSummaryResponse,
   ApiTimeseriesResponse,
@@ -181,6 +182,57 @@ export function buildAmbiguousDiagnostics(
   };
 }
 
+export function buildNoResultsDiagnostics(
+  rows: RawLogEntry[],
+  options: Pick<SummaryOptions, 'parserVersion'> & {
+    sectors: string[];
+    services: string[];
+    limit: number;
+  },
+): ApiNoResultsResponse {
+  const buckets = new Map<string, { count: number; sampleQuestion: string }>();
+
+  for (const row of rows) {
+    if (!isNoResultRow(row)) continue;
+    const term = normalizeTerm(row.pregunta_usuario);
+    if (!term) continue;
+    const current = buckets.get(term) ?? { count: 0, sampleQuestion: row.pregunta_usuario };
+    current.count += 1;
+    buckets.set(term, current);
+  }
+
+  const sectorTerms = options.sectors.map(normalizeText);
+  const serviceTerms = options.services.map(normalizeText);
+  const resultRows = Array.from(buckets.entries())
+    .map(([term, data]) => {
+      const normalizedTerm = normalizeText(term);
+      const coincidesSector = sectorTerms.some((sector) => sector.includes(normalizedTerm));
+      const coincidesService = serviceTerms.some((service) => service.includes(normalizedTerm));
+      const priority = classifyNoResultTerm(term, coincidesSector || coincidesService);
+      return {
+        term,
+        count: data.count,
+        coincidesSector,
+        coincidesService,
+        priority,
+        action: noResultAction(priority),
+        sampleQuestion: data.sampleQuestion,
+      };
+    })
+    .sort((left, right) => {
+      const priorityOrder = priorityWeight(right.priority) - priorityWeight(left.priority);
+      return priorityOrder || right.count - left.count;
+    })
+    .slice(0, options.limit);
+
+  return {
+    rows: resultRows,
+    totalMatched: Array.from(buckets.values()).reduce((total, bucket) => total + bucket.count, 0),
+    parserVersion: options.parserVersion,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 async function hashIp(ip: string, salt: string): Promise<string> {
   const data = new TextEncoder().encode(`${ip}${salt}`);
   const digest = await crypto.subtle.digest('SHA-256', data);
@@ -318,6 +370,7 @@ function isRealInvalidJson(row: RawLogEntry): boolean {
   if (isEmptyQuestion(row)) return false;
   if (isLegitimateConversationalResponse(row.respuesta_ia)) return false;
   if (hasRawClarificationSignal(row.respuesta_ia)) return false;
+  if (isNoResultRow(row)) return false;
   return true;
 }
 
@@ -342,10 +395,18 @@ function isLegitimateConversationalResponse(value: string | Record<string, unkno
   return (
     normalized.startsWith('hola') ||
     normalized.includes('soy cira') ||
-    normalized.includes('no encontr') ||
     normalized.includes('fuera de mi ambito') ||
     normalized.includes('debe limitar su busqueda')
   );
+}
+
+function isNoResultRow(row: RawLogEntry): boolean {
+  if (isEmptyQuestion(row)) return false;
+  if (row.pregunta_usuario.trim().startsWith('/')) return false;
+  if (isLegitimateConversationalResponse(row.respuesta_ia)) return false;
+  const rawResponse = typeof row.respuesta_ia === 'string' ? normalizeText(row.respuesta_ia) : '';
+  const output = normalizeText(row.output ?? '');
+  return rawResponse.includes('no encontr') || output.includes('no encontramos resultados');
 }
 
 function hasRawClarificationSignal(value: string | Record<string, unknown> | null): boolean {
@@ -369,6 +430,30 @@ function normalizeText(value: string | undefined): string {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+function normalizeTerm(value: string | undefined): string {
+  return (value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function classifyNoResultTerm(term: string, catalogMatch: boolean): 'BUG_REAL' | 'SINONIMO' | 'RUIDO' {
+  if (catalogMatch) return 'BUG_REAL';
+  const normalized = normalizeText(term);
+  if (normalized.length <= 3) return 'RUIDO';
+  if (!/[aeiou]/.test(normalized)) return 'RUIDO';
+  return 'SINONIMO';
+}
+
+function noResultAction(priority: 'BUG_REAL' | 'SINONIMO' | 'RUIDO'): string {
+  if (priority === 'BUG_REAL') return 'Revisar whereClause, ChatView o datos del catalogo.';
+  if (priority === 'SINONIMO') return 'Candidato a sinonimo o ajuste de vocabulario del prompt.';
+  return 'Ignorar salvo repeticion alta.';
+}
+
+function priorityWeight(priority: 'BUG_REAL' | 'SINONIMO' | 'RUIDO'): number {
+  if (priority === 'BUG_REAL') return 3;
+  if (priority === 'SINONIMO') return 2;
+  return 1;
 }
 
 function previewValue(value: string | Record<string, unknown> | null): string | undefined {
@@ -426,6 +511,32 @@ export function diagnosticsToCsv(rows: ApiDiagnosticsResponse['rows']): string {
       row.resultadosEncontrados,
       row.needsClarificationAi,
       row.consultaAmbiguaOutput,
+    ]
+      .map(csvCell)
+      .join(','),
+  );
+  return [headers.join(','), ...lines].join('\n');
+}
+
+export function noResultsToCsv(rows: ApiNoResultsResponse['rows']): string {
+  const headers = [
+    'termino',
+    'veces',
+    'coincide_sector',
+    'coincide_servicio',
+    'prioridad',
+    'accion',
+    'pregunta_ejemplo',
+  ];
+  const lines = rows.map((row) =>
+    [
+      row.term,
+      row.count,
+      row.coincidesSector,
+      row.coincidesService,
+      row.priority,
+      row.action,
+      row.sampleQuestion,
     ]
       .map(csvCell)
       .join(','),

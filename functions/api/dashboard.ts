@@ -5,12 +5,13 @@ import {
   buildCompanyRanking,
   buildIntentRanking,
   buildInvalidJsonDiagnostics,
+  buildNoResultsDiagnostics,
   buildLocationRanking,
   buildQuality,
   buildSummary,
   buildTimeseries,
 } from '../../src/etl/metrics';
-import { fetchSupabaseRows } from '../../src/etl/supabase';
+import { fetchCatalogTerms, fetchSupabaseRows } from '../../src/etl/supabase';
 import type { ApiDashboardResponse } from '../../src/shared/types';
 
 interface Env {
@@ -30,10 +31,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
-  const rows = await fetchSupabaseRows(env, {
-    from: url.searchParams.get('from'),
-    to: url.searchParams.get('to'),
-  });
+  const [rows, catalog] = await Promise.all([
+    fetchSupabaseRows(env, {
+      from: url.searchParams.get('from'),
+      to: url.searchParams.get('to'),
+    }),
+    fetchCatalogTerms(env),
+  ]);
 
   const sharedOptions = { parserVersion: env.PARSER_VERSION };
   const responseBody: ApiDashboardResponse = {
@@ -56,6 +60,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       parserVersion: env.PARSER_VERSION,
     }),
     ambiguous: buildAmbiguousDiagnostics(rows, {
+      limit: 12,
+      parserVersion: env.PARSER_VERSION,
+    }),
+    noResults: buildNoResultsDiagnostics(rows, {
+      sectors: catalog.sectors,
+      services: catalog.services,
       limit: 12,
       parserVersion: env.PARSER_VERSION,
     }),

@@ -4,11 +4,13 @@ import {
   buildAmbiguousDiagnostics,
   buildCompanyRanking,
   buildInvalidJsonDiagnostics,
+  buildNoResultsDiagnostics,
   buildIntentRanking,
   buildQuality,
   buildSummary,
   buildTimeseries,
   diagnosticsToCsv,
+  noResultsToCsv,
 } from '../../src/etl/metrics';
 import sampleLogs from '../fixtures/sample_log.json';
 
@@ -117,6 +119,33 @@ describe('summary metrics', () => {
 
     expect(invalidJson.totalMatched).toBe(1);
     expect(invalidJson.rows[0].logId).toBe('real-invalid');
+  });
+
+  it('classifies no-result queries as actionable vocabulary gaps', () => {
+    const rows = [
+      { ...sampleLogs[0], id: 'operator', pregunta_usuario: 'operadores', respuesta_ia: 'No encontramos resultados.' },
+      { ...sampleLogs[0], id: 'cranes', pregunta_usuario: 'gruas', respuesta_ia: 'No encontramos resultados.' },
+      { ...sampleLogs[0], id: 'noise', pregunta_usuario: 'b', respuesta_ia: 'No encontramos resultados.' },
+    ];
+
+    const invalidJson = buildInvalidJsonDiagnostics(rows, {
+      limit: 10,
+      parserVersion: '1.0.0',
+    });
+    const noResults = buildNoResultsDiagnostics(rows, {
+      sectors: ['Operadores'],
+      services: [],
+      limit: 10,
+      parserVersion: '1.0.0',
+    });
+    const csv = noResultsToCsv(noResults.rows);
+
+    expect(invalidJson.totalMatched).toBe(0);
+    expect(noResults.totalMatched).toBe(3);
+    expect(noResults.rows[0]).toMatchObject({ term: 'operadores', priority: 'BUG_REAL' });
+    expect(noResults.rows.some((row) => row.term === 'gruas' && row.priority === 'SINONIMO')).toBe(true);
+    expect(noResults.rows.some((row) => row.term === 'b' && row.priority === 'RUIDO')).toBe(true);
+    expect(csv).toContain('termino,veces,coincide_sector');
   });
 
   it('excludes known false positives from ambiguous diagnostics', () => {

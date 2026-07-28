@@ -44,11 +44,12 @@ Son respuestas CORRECTAS de tipo `conversation`, no JSON roto.
 ```sql
    respuesta_ia ILIKE 'hola%'                         -- saludo
 OR respuesta_ia ILIKE '%soy cira%'
-OR respuesta_ia ILIKE '%no encontr%'                  -- "no encontramos empresas..."
 OR respuesta_ia ILIKE '%fuera de mi %mbito%'          -- consulta fuera de alcance
 OR respuesta_ia ILIKE '%debe limitar su b%squeda%'    -- bloqueo correcto de "listar todo"
 ```
-(≈ 94 filas)
+> ⚠️ **NO incluir aquí `%no encontr%`.** El "No encontramos resultados" NO es un simple falso
+> positivo: es una señal accionable para detectar brechas de vocabulario / sinónimos faltantes.
+> Va a su propia categoría.
 
 ### FP-4 · "Ambigua" que en realidad es DETALLE de una sola empresa
 El `"Te refieres"` se dispara aunque haya **1 solo** resultado exacto, o cuando el mensaje
@@ -105,6 +106,39 @@ El caso arquetípico que SÍ cuenta: nombres con apóstrofe (`KALA'S, C.A.`) que
 
 ---
 
+## 🎯 CATEGORÍA NUEVA Y ACCIONABLE · "Consultas sin resultado"
+
+Esta categoría reúne consultas donde el usuario buscó algo y el bot respondió
+**"No encontramos resultados"**. Cada término repetido es candidato a revisar como:
+sinónimo faltante, dato distinto en `ChatView`, o ajuste del prompt.
+
+### Detección del bucket
+```sql
+(respuesta_ia ILIKE '%no encontr%' OR output ILIKE '%no encontramos resultados%')
+AND COALESCE(TRIM(pregunta_usuario),'') <> ''
+AND pregunta_usuario NOT ILIKE '/%'
+AND respuesta_ia NOT ILIKE 'hola%'
+AND respuesta_ia NOT ILIKE '%soy cira%'
+AND respuesta_ia NOT ILIKE '%fuera de mi %mbito%'
+```
+
+### Clasificación automática por prioridad
+
+| Coincide con catálogo | Prioridad | Acción |
+|---|---|---|
+| Sí, sector/servicio | `BUG_REAL` | Revisar `whereClause`, `ChatView` o datos |
+| No, término de negocio | `SINONIMO` | Candidato a sinónimo o ajuste de vocabulario |
+| No, ruido/gibberish/corto | `RUIDO` | Ignorar salvo repetición alta |
+
+Endpoints:
+
+```text
+/api/diagnostics/no-results
+/api/diagnostics/no-results.csv
+```
+
+---
+
 ## Consulta final sugerida (aplica todas las exclusiones)
 ```sql
 SELECT *
@@ -114,7 +148,6 @@ WHERE fecha_creacion >= '2026-04-17'          -- solo arquitectura actual (where
   AND COALESCE(TRIM(pregunta_usuario),'') <> ''             -- FP-2
   AND respuesta_ia NOT ILIKE 'hola%'                        -- FP-3
   AND respuesta_ia NOT ILIKE '%soy cira%'
-  AND respuesta_ia NOT ILIKE '%no encontr%'
   AND respuesta_ia NOT ILIKE '%fuera de mi %mbito%'
   AND respuesta_ia NOT ILIKE '%debe limitar su b%squeda%'
   AND NOT (query_intent = 'COMPANY' AND resultados_encontrados = 1)   -- FP-4
@@ -158,5 +191,9 @@ WHERE resultado_tipo = 'conversation' AND needs_clarification_ai = TRUE
 ## Resumen para el agente del IDE
 1. Añadir los filtros de exclusión FP-1…FP-4 a las consultas que generan ambos listados.
 2. Segmentar el formato legado `[INTENT:...]` aparte (o excluirlo por fecha < 2026-04-17).
-3. (Ideal) Agregar `resultado_tipo`, `parse_ok`, `es_error_real` al logger y migrar el
+3. Corregir la métrica de **ambigüedad**: dejar de usar `output LIKE '%Te refieres%'` y usar
+   `needs_clarification_ai = TRUE` / patrón "A)…B)".
+4. Crear la categoría **Consultas sin resultado**: NO descartar `%no encontr%`; agrupar por
+   término, cruzarlo contra `sectors`/`services`, y ordenarlo por prioridad/frecuencia.
+5. (Ideal) Agregar `resultado_tipo`, `parse_ok`, `es_error_real` al logger y migrar el
    dashboard a filtrar por `es_error_real` en lugar de intentar `JSON.parse` sobre toda salida.
