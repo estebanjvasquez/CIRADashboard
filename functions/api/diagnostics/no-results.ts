@@ -1,4 +1,3 @@
-import { defaultCache } from '../../../src/etl/cache';
 import { buildNoResultsDiagnostics } from '../../../src/etl/metrics';
 import { fetchCatalogTerms, fetchSupabaseRows } from '../../../src/etl/supabase';
 
@@ -13,11 +12,6 @@ interface Env {
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const url = new URL(request.url);
   const limit = boundedLimit(url.searchParams.get('limit'));
-  const cache = defaultCache();
-  const cacheKey = new Request(request.url, request);
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
-
   const [rows, catalog] = await Promise.all([
     fetchSupabaseRows(env, {
       from: url.searchParams.get('from'),
@@ -33,10 +27,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       limit,
       parserVersion: env.PARSER_VERSION,
     }),
-    { headers: { 'Cache-Control': 'private, max-age=300' } },
+    { headers: { 'Cache-Control': 'no-store' } },
   );
 
-  await cache.put(cacheKey, response.clone());
   return response;
 };
 

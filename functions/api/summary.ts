@@ -1,5 +1,4 @@
 import { buildSummary } from '../../src/etl/metrics';
-import { defaultCache } from '../../src/etl/cache';
 import { fetchSupabaseRows } from '../../src/etl/supabase';
 
 interface Env {
@@ -16,10 +15,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const url = new URL(request.url);
   const from = url.searchParams.get('from');
   const to = url.searchParams.get('to');
-  const cache = defaultCache();
-  const cacheKey = new Request(request.url, request);
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
 
   const rows = await fetchSupabaseRows(env, { from, to });
   const response = Response.json(
@@ -28,9 +23,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       parserVersion: env.PARSER_VERSION,
       reportTimezone: env.REPORT_TIMEZONE,
     }),
-    { headers: { 'Cache-Control': 'private, max-age=300' } },
+    { headers: { 'Cache-Control': 'no-store' } },
   );
 
-  await cache.put(cacheKey, response.clone());
   return response;
 };

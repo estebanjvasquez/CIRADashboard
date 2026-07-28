@@ -42,7 +42,7 @@ async function fetchRowsFromTable(
 ): Promise<Response> {
   const apiUrl = new URL(`/rest/v1/${table}`, env.SUPABASE_URL);
   apiUrl.searchParams.set('select', '*');
-  apiUrl.searchParams.set('order', 'fecha_creacion.asc');
+  apiUrl.searchParams.set('order', 'fecha_creacion.desc');
   apiUrl.searchParams.set('limit', String(limit));
 
   if (options.from) apiUrl.searchParams.set('fecha_creacion', `gte.${options.from}`);
