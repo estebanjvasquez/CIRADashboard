@@ -92,8 +92,10 @@ FROM audit_log_entries;
 `request.cf` **NO sirve** aquí: geolocaliza la IP de quien abre el dashboard, no la IP
 guardada del visitante. Hay que resolver la IP almacenada. Opciones:
 
-- **Recomendado**: enriquecer por lotes las IPs distintas con un servicio (ej. `ip-api.com/batch`
-  — gratis, 100 IPs/petición, sin key; o `ipinfo.io` con token) y **cachear** en una tabla:
+- **Recomendado**: enriquecer las IPs distintas mediante un servicio HTTPS y **cachear** en una tabla.
+  El dashboard usa `ipwho.is` sin clave con concurrencia limitada y conserva `ip_geo` para evitar
+  resolver la misma IP en solicitudes posteriores. La caché es opcional: un error al persistir no
+  debe ocultar una ubicación recién resuelta.
   ```sql
   CREATE TABLE IF NOT EXISTS ip_geo (
     ip text PRIMARY KEY, pais text, region text, ciudad text, isp text, actualizado timestamptz DEFAULT now()

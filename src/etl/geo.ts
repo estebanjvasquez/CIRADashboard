@@ -2,16 +2,17 @@ import type { RawLogEntry } from '../shared/types';
 import { parseMetadata } from './parsers';
 import { fetchIpGeoRows, upsertIpGeoRows, type IpGeoRow, type SupabaseEnv } from './supabase';
 
-interface IpApiBatchRow {
-  status: 'success' | 'fail';
-  query?: string;
+interface IpWhoIsRow {
+  success: boolean;
+  ip?: string;
   country?: string;
-  regionName?: string;
+  region?: string;
   city?: string;
-  isp?: string;
+  connection?: { isp?: string };
 }
 
 const IP_API_BATCH_LIMIT = 100;
+const GEO_LOOKUP_CONCURRENCY = 20;
 
 export async function enrichRowsWithIpGeo(env: SupabaseEnv, rows: RawLogEntry[]): Promise<RawLogEntry[]> {
   try {
@@ -24,8 +25,10 @@ export async function enrichRowsWithIpGeo(env: SupabaseEnv, rows: RawLogEntry[])
 
     let resolvedRows: IpGeoRow[] = [];
     if (missingIps.length) {
-      resolvedRows = await resolveIpApiBatch(missingIps);
-      if (resolvedRows.length) await upsertIpGeoRows(env, resolvedRows);
+      resolvedRows = await resolveIpWhoIs(missingIps);
+      // The dashboard must still show newly resolved locations when the optional
+      // Supabase cache is unavailable or its table has not been created yet.
+      if (resolvedRows.length) await upsertIpGeoRows(env, resolvedRows).catch(() => undefined);
     }
 
     const geoByIp = new Map<string, IpGeoRow>([
@@ -110,26 +113,42 @@ function isPublicIpv6(value: string): boolean {
   );
 }
 
-async function resolveIpApiBatch(ips: string[]): Promise<IpGeoRow[]> {
-  const apiUrl = new URL('http://ip-api.com/batch');
-  apiUrl.searchParams.set('fields', 'status,query,country,regionName,city,isp');
-  apiUrl.searchParams.set('lang', 'es');
-
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(ips),
+async function resolveIpWhoIs(ips: string[]): Promise<IpGeoRow[]> {
+  const resolved = await mapWithConcurrency(ips, GEO_LOOKUP_CONCURRENCY, async (ip) => {
+    try {
+      const response = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`);
+      if (!response.ok) return undefined;
+      const row = (await response.json()) as IpWhoIsRow;
+      if (!row.success || !row.ip) return undefined;
+      return {
+        ip: row.ip,
+        pais: row.country || null,
+        region: row.region || null,
+        ciudad: row.city || null,
+        isp: row.connection?.isp || null,
+      };
+    } catch {
+      return undefined;
+    }
   });
-  if (!response.ok) return [];
 
-  const rows = (await response.json()) as IpApiBatchRow[];
-  return rows
-    .filter((row) => row.status === 'success' && row.query)
-    .map((row) => ({
-      ip: row.query as string,
-      pais: row.country || null,
-      region: row.regionName || null,
-      ciudad: row.city || null,
-      isp: row.isp || null,
-    }));
+  return resolved.filter((row): row is IpGeoRow => Boolean(row));
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(values[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
+  return results;
 }

@@ -33,14 +33,14 @@ describe('geo enrichment', () => {
       .mockResolvedValueOnce(
         Response.json([
           {
-            status: 'success',
-            query: '8.8.8.8',
+            success: true,
+            ip: '8.8.8.8',
             country: 'Estados Unidos',
-            regionName: 'Virginia',
+            region: 'Virginia',
             city: 'Ashburn',
-            isp: 'Google',
+            connection: { isp: 'Google' },
           },
-        ]),
+        ][0]),
       )
       .mockResolvedValueOnce(new Response(null, { status: 201 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -53,7 +53,6 @@ describe('geo enrichment', () => {
       geo_ciudad: 'Ashburn',
       geo_isp: 'Google',
     });
-    expect(String(fetchMock.mock.calls[1][0])).toContain('http://ip-api.com/batch');
-    expect(fetchMock.mock.calls[1][1]?.body).toBe('["8.8.8.8"]');
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://ipwho.is/8.8.8.8');
   });
 });
