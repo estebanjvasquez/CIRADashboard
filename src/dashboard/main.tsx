@@ -125,12 +125,12 @@ function App() {
           No se pudieron cargar las metricas. Verifica la sesion de Cloudflare Access.
         </section>
       )}
-      {status === 'ready' && data && <Dashboard data={data} />}
+      {status === 'ready' && data && <Dashboard data={data} query={query} />}
     </main>
   );
 }
 
-function Dashboard({ data }: { data: DashboardData }) {
+function Dashboard({ data, query }: { data: DashboardData; query: string }) {
   return (
     <>
       <section className="kpi-grid">
@@ -172,12 +172,14 @@ function Dashboard({ data }: { data: DashboardData }) {
           total={data.invalidJson.totalMatched}
           rows={data.invalidJson.rows}
           mode="json"
+          downloadUrl={diagnosticCsvUrl('/diagnostics/invalid-json.csv', query)}
         />
         <DiagnosticPanel
           title="Diagnostico respuestas ambiguas"
           total={data.ambiguous.totalMatched}
           rows={data.ambiguous.rows}
           mode="ambiguous"
+          downloadUrl={diagnosticCsvUrl('/diagnostics/ambiguous.csv', query)}
         />
       </section>
     </>
@@ -267,16 +269,25 @@ function DiagnosticPanel({
   total,
   rows,
   mode,
+  downloadUrl,
 }: {
   title: string;
   total: number;
   rows: DiagnosticRow[];
   mode: 'json' | 'ambiguous';
+  downloadUrl: string;
 }) {
   return (
     <section className="panel diagnostics-panel">
-      <h2>{title}</h2>
-      <p className="muted">{formatNumber(total)} filas detectadas. Mostrando muestra reciente.</p>
+      <div className="panel-title-row">
+        <div>
+          <h2>{title}</h2>
+          <p className="muted">{formatNumber(total)} filas detectadas. Mostrando muestra reciente.</p>
+        </div>
+        <a className="download-link" href={downloadUrl}>
+          Descargar CSV
+        </a>
+      </div>
       <div className="diagnostic-list">
         {rows.length === 0 && <p className="muted">Sin casos para revisar.</p>}
         {rows.map((row) => (
@@ -309,6 +320,11 @@ function DiagnosticPanel({
       </div>
     </section>
   );
+}
+
+function diagnosticCsvUrl(path: string, query: string): string {
+  const separator = query ? '&' : '?';
+  return `${apiBaseUrl}${path}${query}${separator}limit=500`;
 }
 
 async function getJson<T>(path: string): Promise<T> {

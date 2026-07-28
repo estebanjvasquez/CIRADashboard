@@ -339,3 +339,46 @@ function truncate(value: string | undefined, max: number): string | undefined {
   if (!value) return undefined;
   return value.length > max ? `${value.slice(0, max - 1)}...` : value;
 }
+
+export function diagnosticsToCsv(rows: ApiDiagnosticsResponse['rows']): string {
+  const headers = [
+    'log_id',
+    'fecha_creacion',
+    'session_id',
+    'reason',
+    'pregunta_usuario',
+    'respuesta_ia_preview',
+    'output_preview',
+    'query_intent',
+    'where_clause',
+    'human_summary',
+    'resultados_encontrados',
+    'needs_clarification_ai',
+    'consulta_ambigua_output',
+  ];
+  const lines = rows.map((row) =>
+    [
+      row.logId,
+      row.fechaCreacion,
+      row.sessionId,
+      row.reason,
+      row.preguntaUsuario,
+      row.respuestaIaPreview,
+      row.outputPreview,
+      row.queryIntent,
+      row.whereClause,
+      row.humanSummary,
+      row.resultadosEncontrados,
+      row.needsClarificationAi,
+      row.consultaAmbiguaOutput,
+    ]
+      .map(csvCell)
+      .join(','),
+  );
+  return [headers.join(','), ...lines].join('\n');
+}
+
+function csvCell(value: unknown): string {
+  const text = value === undefined || value === null ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}

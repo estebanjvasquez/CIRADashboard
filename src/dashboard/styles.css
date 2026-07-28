@@ -143,6 +143,26 @@ code {
   margin-bottom: 18px;
 }
 
+.panel-title-row {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.panel-title-row h2 {
+  margin-bottom: 8px;
+}
+
+.download-link {
+  border: 1px solid #8e9c8d;
+  color: #17201b;
+  flex: 0 0 auto;
+  font-size: 13px;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
 .bar-chart,
 .ranking-list {
   display: grid;
@@ -319,11 +339,13 @@ code {
   }
 
   .diagnostic-head,
+  .panel-title-row,
   .diagnostic-row dl {
     grid-template-columns: 1fr;
   }
 
-  .diagnostic-head {
+  .diagnostic-head,
+  .panel-title-row {
     display: grid;
   }
 

@@ -8,6 +8,7 @@ import {
   buildQuality,
   buildSummary,
   buildTimeseries,
+  diagnosticsToCsv,
 } from '../../src/etl/metrics';
 import sampleLogs from '../fixtures/sample_log.json';
 
@@ -86,5 +87,17 @@ describe('summary metrics', () => {
     expect(invalidJson.rows[0].reason).toBe('JSON envuelto en Markdown');
     expect(ambiguous.totalMatched).toBe(1);
     expect(ambiguous.rows[0].reason).toContain('needsClarification=true');
+  });
+
+  it('exports diagnostics as csv', () => {
+    const diagnostics = buildInvalidJsonDiagnostics(
+      [{ ...sampleLogs[0], id: 'invalid-json', respuesta_ia: 'no "json"' }],
+      { limit: 10, parserVersion: '1.0.0' },
+    );
+    const csv = diagnosticsToCsv(diagnostics.rows);
+
+    expect(csv).toContain('log_id,fecha_creacion,session_id');
+    expect(csv).toContain('"invalid-json"');
+    expect(csv).toContain('"no ""json"""');
   });
 });
