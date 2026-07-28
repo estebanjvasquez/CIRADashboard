@@ -55,4 +55,30 @@ describe('geo enrichment', () => {
     });
     expect(String(fetchMock.mock.calls[1][0])).toBe('https://ipwho.is/8.8.8.8');
   });
+
+  it('resolves uncached IPs after already cached addresses', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json([{ ip: '8.8.8.8', pais: 'Estados Unidos', region: null, ciudad: null, isp: null }]))
+      .mockResolvedValueOnce(
+        Response.json({
+          success: true,
+          ip: '1.1.1.1',
+          country: 'Australia',
+          region: 'Queensland',
+          city: 'Brisbane',
+          connection: { isp: 'Cloudflare' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 201 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const rows = await enrichRowsWithIpGeo(env, [
+      { ...sampleLogs[0], id: 'cached', ip: '8.8.8.8' },
+      { ...sampleLogs[0], id: 'missing', ip: '1.1.1.1' },
+    ]);
+
+    expect(rows.find((row) => row.id === 'missing')).toMatchObject({ geo_ciudad: 'Brisbane' });
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://ipwho.is/1.1.1.1');
+  });
 });

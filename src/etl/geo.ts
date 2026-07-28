@@ -16,12 +16,14 @@ const GEO_LOOKUP_CONCURRENCY = 20;
 
 export async function enrichRowsWithIpGeo(env: SupabaseEnv, rows: RawLogEntry[]): Promise<RawLogEntry[]> {
   try {
-    const ips = uniquePublicIps(rows).slice(0, IP_API_BATCH_LIMIT);
-    if (!ips.length) return rows;
+    const allIps = uniquePublicIps(rows);
+    if (!allIps.length) return rows;
 
-    const cachedRows = await fetchIpGeoRows(env, ips);
+    const cachedRows = await fetchIpGeoRows(env, allIps);
     const cachedByIp = new Map(cachedRows.map((row) => [row.ip, row]));
-    const missingIps = ips.filter((ip) => !cachedByIp.has(ip));
+    // Apply the per-request lookup cap after removing cached IPs. Otherwise,
+    // a filled first page of cache entries can starve all later addresses.
+    const missingIps = allIps.filter((ip) => !cachedByIp.has(ip)).slice(0, IP_API_BATCH_LIMIT);
 
     let resolvedRows: IpGeoRow[] = [];
     if (missingIps.length) {
