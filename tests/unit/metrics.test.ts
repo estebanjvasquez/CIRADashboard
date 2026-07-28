@@ -68,8 +68,9 @@ describe('summary metrics', () => {
       {
         ...sampleLogs[0],
         id: 'ambiguous',
+        pregunta_usuario: 'empresas de perforacion en zulia',
         respuesta_ia:
-          '{"queryIntent":"COMPANY","needsClarification":true,"humanSummary":"Consulta ambigua"}',
+          '{"queryIntent":"SECTOR","needsClarification":true,"humanSummary":"Consulta ambigua"}',
         output: '<div>Te refieres a alguna de estas empresas? Encontré <strong>3</strong></div>',
       },
     ];
@@ -87,6 +88,68 @@ describe('summary metrics', () => {
     expect(invalidJson.rows[0].reason).toBe('JSON envuelto en Markdown');
     expect(ambiguous.totalMatched).toBe(1);
     expect(ambiguous.rows[0].reason).toContain('needsClarification=true');
+  });
+
+  it('excludes known false positives from invalid JSON diagnostics', () => {
+    const rows = [
+      { ...sampleLogs[0], id: 'legacy', respuesta_ia: '[INTENT:LIST] [{"name":"ACME"}]' },
+      { ...sampleLogs[0], id: 'empty-question', pregunta_usuario: '', respuesta_ia: 'not json' },
+      { ...sampleLogs[0], id: 'hello', respuesta_ia: 'Hola, soy CIRA. ¿Como puedo ayudarte?' },
+      { ...sampleLogs[0], id: 'no-results', respuesta_ia: 'No encontramos empresas con ese criterio.' },
+      {
+        ...sampleLogs[0],
+        id: 'real-invalid',
+        pregunta_usuario: "Busca KALA'S, C.A.",
+        respuesta_ia: '{"whereClause":"LOWER(name) LIKE LOWER("%KALA\\S%")"}',
+      },
+    ];
+
+    const invalidJson = buildInvalidJsonDiagnostics(rows, {
+      limit: 10,
+      parserVersion: '1.0.0',
+    });
+
+    expect(invalidJson.totalMatched).toBe(1);
+    expect(invalidJson.rows[0].logId).toBe('real-invalid');
+  });
+
+  it('excludes known false positives from ambiguous diagnostics', () => {
+    const rows = [
+      {
+        ...sampleLogs[0],
+        id: 'company-one-result',
+        respuesta_ia: '{"queryIntent":"COMPANY","needsClarification":true}',
+        output: '<div>Te refieres a esta empresa? Encontré <strong>1</strong></div>',
+      },
+      {
+        ...sampleLogs[0],
+        id: 'company-detail-click',
+        pregunta_usuario: 'Dame información sobre la empresa ACME',
+        respuesta_ia: '{"queryIntent":"SECTOR","needsClarification":true}',
+        output: '<div>Te refieres a alguna de estas empresas? Encontré <strong>3</strong></div>',
+      },
+      {
+        ...sampleLogs[0],
+        id: 'company-intent',
+        respuesta_ia: '{"queryIntent":"COMPANY","needsClarification":true}',
+        output: '<div>Te refieres a alguna de estas empresas? Encontré <strong>3</strong></div>',
+      },
+      {
+        ...sampleLogs[0],
+        id: 'real-ambiguous',
+        pregunta_usuario: 'empresas de servicios petroleros',
+        respuesta_ia: '{"queryIntent":"SECTOR","needsClarification":true}',
+        output: '<div>Te refieres a alguna de estas empresas? Encontré <strong>4</strong></div>',
+      },
+    ];
+
+    const ambiguous = buildAmbiguousDiagnostics(rows, {
+      limit: 10,
+      parserVersion: '1.0.0',
+    });
+
+    expect(ambiguous.totalMatched).toBe(1);
+    expect(ambiguous.rows[0].logId).toBe('real-ambiguous');
   });
 
   it('exports diagnostics as csv', () => {

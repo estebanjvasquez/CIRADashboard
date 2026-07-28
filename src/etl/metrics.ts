@@ -31,16 +31,15 @@ export async function buildSummary(
     totalTokens += Number(row.tokens_usados || 0);
     if (row.error_log) errorRows += 1;
 
-    const parsedIa = parseJsonFields(row.respuesta_ia);
-    if (!parsedIa.isValid) invalidJsonRows += 1;
+    if (isRealInvalidJson(row)) invalidJsonRows += 1;
 
     const parsedMetadata = parseMetadata(row.metadata);
     if (parsedMetadata.ipUsuario) {
       userHashes.add(await hashIp(parsedMetadata.ipUsuario, options.ipHashSalt));
     }
 
+    if (isRealAmbiguous(row)) ambiguousRows += 1;
     const parsedHtml = parseOutputHtml(row.output);
-    if (parsedHtml.consultaAmbiguaOutput) ambiguousRows += 1;
     if (parsedHtml.tieneWeb) rowsWithWebsite += 1;
   }
 
@@ -74,7 +73,7 @@ export function buildTimeseries(
     current.queries += 1;
     current.tokens += Number(row.tokens_usados || 0);
     if (row.error_log) current.errors += 1;
-    if (html.consultaAmbiguaOutput) current.ambiguous += 1;
+    if (isRealAmbiguous(row)) current.ambiguous += 1;
     buckets.set(date, current);
   }
 
@@ -97,10 +96,9 @@ export function buildQuality(
   let rowsWithWebsite = 0;
 
   for (const row of rows) {
-    const parsedIa = parseJsonFields(row.respuesta_ia);
     const parsedHtml = parseOutputHtml(row.output);
-    if (!parsedIa.isValid) invalidJsonRows += 1;
-    if (parsedHtml.consultaAmbiguaOutput) ambiguousRows += 1;
+    if (isRealInvalidJson(row)) invalidJsonRows += 1;
+    if (isRealAmbiguous(row)) ambiguousRows += 1;
     if (parsedHtml.tieneWeb) rowsWithWebsite += 1;
     if (row.error_log) errorRows += 1;
   }
@@ -157,7 +155,7 @@ export function buildInvalidJsonDiagnostics(
   rows: RawLogEntry[],
   options: Pick<SummaryOptions, 'parserVersion'> & { limit: number },
 ): ApiDiagnosticsResponse {
-  const matched = rows.filter((row) => !parseJsonFields(row.respuesta_ia).isValid);
+  const matched = rows.filter(isRealInvalidJson);
 
   return {
     rows: matched.slice(0, options.limit).map((row) => diagnosticRow(row, invalidJsonReason(row))),
@@ -172,11 +170,7 @@ export function buildAmbiguousDiagnostics(
   rows: RawLogEntry[],
   options: Pick<SummaryOptions, 'parserVersion'> & { limit: number },
 ): ApiDiagnosticsResponse {
-  const matched = rows.filter((row) => {
-    const parsedIa = parseJsonFields(row.respuesta_ia);
-    const parsedHtml = parseOutputHtml(row.output);
-    return Boolean(parsedIa.needsClarification || parsedHtml.consultaAmbiguaOutput);
-  });
+  const matched = rows.filter(isRealAmbiguous);
 
   return {
     rows: matched.slice(0, options.limit).map((row) => diagnosticRow(row, ambiguityReason(row))),
@@ -314,6 +308,58 @@ function ambiguityReason(row: RawLogEntry): string {
   if (parsedHtml.consultaAmbiguaOutput) reasons.push('output contiene "Te refieres"');
   if (parsedHtml.resultadosEncontrados > 1) reasons.push(`${parsedHtml.resultadosEncontrados} resultados encontrados`);
   return reasons.join(', ') || 'ambiguedad detectada';
+}
+
+function isRealInvalidJson(row: RawLogEntry): boolean {
+  const parsedIa = parseJsonFields(row.respuesta_ia);
+  if (parsedIa.isValid) return false;
+  if (isLegacyIntentFormat(row.respuesta_ia)) return false;
+  if (isEmptyQuestion(row)) return false;
+  if (isLegitimateConversationalResponse(row.respuesta_ia)) return false;
+  return true;
+}
+
+function isRealAmbiguous(row: RawLogEntry): boolean {
+  const parsedIa = parseJsonFields(row.respuesta_ia);
+  const parsedHtml = parseOutputHtml(row.output);
+  if (!parsedHtml.consultaAmbiguaOutput) return false;
+  if (parsedHtml.resultadosEncontrados <= 1) return false;
+  if (isCompanyDetailQuestion(row.pregunta_usuario)) return false;
+  if (normalizeText(parsedIa.queryIntent) === 'company') return false;
+  return true;
+}
+
+function isLegacyIntentFormat(value: string | Record<string, unknown> | null): boolean {
+  return typeof value === 'string' && /^\s*\[(intent|needs_clar)/i.test(value);
+}
+
+function isEmptyQuestion(row: RawLogEntry): boolean {
+  return !row.pregunta_usuario?.trim();
+}
+
+function isLegitimateConversationalResponse(value: string | Record<string, unknown> | null): boolean {
+  if (typeof value !== 'string') return false;
+  const normalized = normalizeText(value);
+  return (
+    normalized.startsWith('hola') ||
+    normalized.includes('soy cira') ||
+    normalized.includes('no encontr') ||
+    normalized.includes('fuera de mi ambito') ||
+    normalized.includes('debe limitar su busqueda')
+  );
+}
+
+function isCompanyDetailQuestion(value: string | undefined): boolean {
+  return normalizeText(value).startsWith('dame informacion sobre la empresa');
+}
+
+function normalizeText(value: string | undefined): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 function previewValue(value: string | Record<string, unknown> | null): string | undefined {
