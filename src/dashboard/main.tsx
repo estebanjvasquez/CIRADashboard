@@ -89,43 +89,11 @@ function App() {
 
   useEffect(() => {
     setStatus('loading');
-    Promise.all([
-      getJson<Summary>(`/summary${query}`),
-      getJson<{ rows: TimeseriesRow[] }>(`/timeseries${query}`),
-      getJson<{ rows: RankingRow[] }>(`/intents${query}`),
-      getJson<{ rows: RankingRow[] }>(`/top-companies${query}`),
-      getJson<{ rows: RankingRow[] }>(`/top-categories${query}`),
-      getJson<{ rows: RankingRow[] }>(`/locations${query}`),
-      getJson<Quality>(`/quality${query}`),
-      getJson<Diagnostics>(`/diagnostics/invalid-json${appendLimit(query)}`),
-      getJson<Diagnostics>(`/diagnostics/ambiguous${appendLimit(query)}`),
-    ])
-      .then(
-        ([
-          summary,
-          timeseries,
-          intents,
-          companies,
-          categories,
-          locations,
-          quality,
-          invalidJson,
-          ambiguous,
-        ]) => {
-          setData({
-            summary,
-            timeseries,
-            intents,
-            companies,
-            categories,
-            locations,
-            quality,
-            invalidJson,
-            ambiguous,
-          });
+    getJson<DashboardData>(`/dashboard${query}`)
+      .then((dashboardData) => {
+        setData(dashboardData);
         setStatus('ready');
-      },
-      )
+      })
       .catch(() => setStatus('error'));
   }, [query]);
 
@@ -160,11 +128,6 @@ function App() {
       {status === 'ready' && data && <Dashboard data={data} />}
     </main>
   );
-}
-
-function appendLimit(query: string): string {
-  const separator = query ? '&' : '?';
-  return `${query}${separator}limit=12`;
 }
 
 function Dashboard({ data }: { data: DashboardData }) {

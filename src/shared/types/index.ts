@@ -185,3 +185,16 @@ export interface ApiDiagnosticsResponse {
   parserVersion: string;
   generatedAt: string;
 }
+
+export interface ApiDashboardResponse {
+  summary: ApiSummaryResponse;
+  timeseries: ApiTimeseriesResponse;
+  intents: ApiRankingResponse;
+  companies: ApiRankingResponse;
+  categories: ApiRankingResponse;
+  locations: ApiRankingResponse;
+  quality: ApiQualityResponse;
+  invalidJson: ApiDiagnosticsResponse;
+  ambiguous: ApiDiagnosticsResponse;
+  generatedAt: string;
+}
