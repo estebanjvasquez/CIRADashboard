@@ -1,6 +1,12 @@
--- Añade parse_status y parse_ok (observabilidad de parseo del JSON del agente)
--- a la vista v_logs. Requiere haber aplicado 001 primero.
-CREATE OR REPLACE VIEW public.v_logs AS
+-- Añade parse_status y parse_ok (observabilidad de parseo del JSON del agente) a v_logs.
+-- Requiere haber aplicado 001 primero.
+--
+-- NOTA: se usa DROP + CREATE (no CREATE OR REPLACE) porque Postgres no permite
+-- insertar/renombrar columnas en medio de una vista existente. DROP VIEW solo elimina
+-- la VISTA; la tabla audit_log_entries y sus datos NO se tocan.
+DROP VIEW IF EXISTS public.v_logs;
+
+CREATE VIEW public.v_logs AS
 SELECT
   l.id,
   l.fecha_creacion,
