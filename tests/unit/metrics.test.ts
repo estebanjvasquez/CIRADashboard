@@ -215,6 +215,38 @@ describe('summary metrics', () => {
     expect(invalidJson.rows[0].logId).toBe('real-invalid');
   });
 
+  it('does not count comando_error rows as invalid JSON', () => {
+    const rows = [
+      {
+        ...sampleLogs[0],
+        id: 'wrong-pass',
+        pregunta_usuario: '/aprender clavemala X: y',
+        resultado_tipo: 'comando_error',
+        respuesta_ia: null,
+        output: '<div>Clave incorrecta. El comando no fue ejecutado.</div>',
+      },
+    ];
+
+    const invalidJson = buildInvalidJsonDiagnostics(rows, { limit: 10, parserVersion: '1.0.0' });
+
+    expect(invalidJson.totalMatched).toBe(0);
+  });
+
+  it('treats short terms as noise even when they substring-match the catalog', () => {
+    const rows = [
+      { ...sampleLogs[0], id: 'short-match', pregunta_usuario: 'a', respuesta_ia: 'No encontramos resultados.' },
+    ];
+
+    const noResults = buildNoResultsDiagnostics(rows, {
+      sectors: ['Fabricantes'], // 'fabricantes' contiene la 'a' -> substring match
+      services: [],
+      limit: 10,
+      parserVersion: '1.0.0',
+    });
+
+    expect(noResults.rows[0]).toMatchObject({ term: 'a', priority: 'RUIDO' });
+  });
+
   it('classifies no-result queries as actionable vocabulary gaps', () => {
     const rows = [
       { ...sampleLogs[0], id: 'operator', pregunta_usuario: 'operadores', respuesta_ia: 'No encontramos resultados.' },

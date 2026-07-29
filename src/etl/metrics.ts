@@ -430,7 +430,9 @@ function ambiguityReason(row: RawLogEntry): string {
 
 function isRealInvalidJson(row: RawLogEntry): boolean {
   if (row.resultado_tipo) {
-    if (!['error', 'comando_error'].includes(normalizeText(row.resultado_tipo))) return false;
+    // Solo 'error' es JSON inválido real. 'comando_error' (clave admin errónea) es un
+    // comando rechazado, no un JSON malformado; no debe inflar esta métrica.
+    if (normalizeText(row.resultado_tipo) !== 'error') return false;
   }
   const parsedIa = parseJsonFields(row.respuesta_ia);
   if (parsedIa.isValid) return false;
@@ -509,10 +511,12 @@ function normalizeTerm(value: string | undefined): string {
 }
 
 function classifyNoResultTerm(term: string, catalogMatch: boolean): 'BUG_REAL' | 'SINONIMO' | 'RUIDO' {
-  if (catalogMatch) return 'BUG_REAL';
   const normalized = normalizeText(term);
+  // Ruido primero: términos muy cortos o sin vocales son ruido AUNQUE hagan match parcial
+  // de substring contra el catálogo (evita marcar 'a', 'b' como BUG_REAL).
   if (normalized.length <= 3) return 'RUIDO';
   if (!/[aeiou]/.test(normalized)) return 'RUIDO';
+  if (catalogMatch) return 'BUG_REAL';
   return 'SINONIMO';
 }
 
