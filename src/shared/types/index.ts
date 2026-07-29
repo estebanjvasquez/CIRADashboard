@@ -16,6 +16,8 @@ export interface RawLogEntry {
   error_log: string | null;
   output: string | null;
   resultado_tipo?: string | null;
+  parse_status?: string | null;
+  parse_ok?: boolean | null;
   needs_clarification?: boolean | null;
   query_intent?: string | null;
   where_clause?: string | null;
