@@ -2,6 +2,7 @@ import {
   buildAmbiguousDiagnostics,
   buildCategoryRanking,
   buildCompanyRanking,
+  buildDemand,
   buildIntentRanking,
   buildInvalidJsonDiagnostics,
   buildNoResultsDiagnostics,
@@ -65,6 +66,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       sectors: catalog.sectors,
       services: catalog.services,
       limit: 12,
+      parserVersion: env.PARSER_VERSION,
+    }),
+    demand: buildDemand(rows, {
+      limit: 20,
       parserVersion: env.PARSER_VERSION,
     }),
     generatedAt: new Date().toISOString(),

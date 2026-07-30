@@ -236,6 +236,7 @@ export interface ApiDashboardResponse {
   invalidJson: ApiDiagnosticsResponse;
   ambiguous: ApiDiagnosticsResponse;
   noResults: ApiNoResultsResponse;
+  demand: ApiDemandResponse;
   generatedAt: string;
 }
 
@@ -252,6 +253,27 @@ export interface ApiNoResultsRow {
 export interface ApiNoResultsResponse {
   rows: ApiNoResultsRow[];
   totalMatched: number;
+  parserVersion: string;
+  generatedAt: string;
+}
+
+export interface ApiDemandProspectRow {
+  term: string;
+  count: number;
+  lastSeen: string;
+  sampleQuestion: string;
+}
+
+export interface ApiDemandInterestRow {
+  category: string;
+  count: number;
+  sampleQuestion: string;
+}
+
+export interface ApiDemandResponse {
+  prospects: ApiDemandProspectRow[];
+  interests: ApiDemandInterestRow[];
+  totalProspects: number;
   parserVersion: string;
   generatedAt: string;
 }

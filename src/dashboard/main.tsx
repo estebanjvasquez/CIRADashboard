@@ -76,6 +76,25 @@ interface NoResults {
   totalMatched: number;
 }
 
+interface DemandProspectRow {
+  term: string;
+  count: number;
+  lastSeen: string;
+  sampleQuestion: string;
+}
+
+interface DemandInterestRow {
+  category: string;
+  count: number;
+  sampleQuestion: string;
+}
+
+interface Demand {
+  prospects: DemandProspectRow[];
+  interests: DemandInterestRow[];
+  totalProspects: number;
+}
+
 interface DashboardData {
   summary: Summary;
   timeseries: { rows: TimeseriesRow[] };
@@ -88,6 +107,7 @@ interface DashboardData {
   invalidJson: Diagnostics;
   ambiguous: Diagnostics;
   noResults: NoResults;
+  demand: Demand;
 }
 
 function App() {
@@ -184,6 +204,15 @@ function Dashboard({ data, query }: { data: DashboardData; query: string }) {
         </p>
       </section>
 
+      {data.demand && (
+        <section className="diagnostics-grid">
+          <DemandPanel
+            demand={data.demand}
+            downloadUrl={diagnosticCsvUrl('/demand.csv', query)}
+          />
+        </section>
+      )}
+
       <section className="diagnostics-grid">
         <NoResultsPanel
           total={data.noResults.totalMatched}
@@ -206,6 +235,62 @@ function Dashboard({ data, query }: { data: DashboardData; query: string }) {
         />
       </section>
     </>
+  );
+}
+
+const INTEREST_LABELS: Record<string, string> = {
+  interes_afiliacion: 'Interes en afiliarse',
+  interes_eventos: 'Cursos / eventos',
+  busqueda_empleo: 'Busqueda de empleo',
+  consulta_economica: 'Consulta economica',
+  soporte_afiliado: 'Soporte de afiliado',
+  otro_fuera_alcance: 'Otro / fuera de alcance',
+};
+
+function DemandPanel({ demand, downloadUrl }: { demand: Demand; downloadUrl: string }) {
+  return (
+    <section className="panel diagnostics-panel">
+      <div className="panel-title-row">
+        <div>
+          <h2>Demanda y prospectos</h2>
+          <p className="muted">
+            {formatNumber(demand.totalProspects)} empresas buscadas que no estan afiliadas.
+            Oportunidades de afiliacion e intereses del publico.
+          </p>
+        </div>
+        <a className="download-link" href={downloadUrl}>
+          Descargar prospectos CSV
+        </a>
+      </div>
+
+      <h3 className="muted" style={{ margin: '4px 0' }}>Empresas no afiliadas mas buscadas</h3>
+      <div className="ranking-list">
+        {demand.prospects.length === 0 && <p className="muted">Sin prospectos por ahora.</p>}
+        {demand.prospects.map((row) => (
+          <article className="ranking-row" key={row.term}>
+            <div>
+              <strong>{row.term}</strong>
+              <span>{new Date(row.lastSeen).toLocaleDateString()}</span>
+            </div>
+            <em>{formatNumber(row.count)}</em>
+          </article>
+        ))}
+      </div>
+
+      <h3 className="muted" style={{ margin: '12px 0 4px' }}>Otros intereses del publico</h3>
+      <div className="ranking-list">
+        {demand.interests.length === 0 && <p className="muted">Sin intereses registrados.</p>}
+        {demand.interests.map((row) => (
+          <article className="ranking-row" key={row.category}>
+            <div>
+              <strong>{INTEREST_LABELS[row.category] || row.category}</strong>
+              <span>{row.sampleQuestion}</span>
+            </div>
+            <em>{formatNumber(row.count)}</em>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

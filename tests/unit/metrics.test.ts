@@ -3,6 +3,7 @@ import {
   buildCategoryRanking,
   buildAmbiguousDiagnostics,
   buildCompanyRanking,
+  buildDemand,
   buildInvalidJsonDiagnostics,
   buildLocationRanking,
   buildTimezoneRanking,
@@ -12,6 +13,7 @@ import {
   buildSummary,
   buildTimeseries,
   diagnosticsToCsv,
+  demandProspectsToCsv,
   noResultsToCsv,
 } from '../../src/etl/metrics';
 import sampleLogs from '../fixtures/sample_log.json';
@@ -312,6 +314,28 @@ describe('summary metrics', () => {
 
     expect(ambiguous.totalMatched).toBe(2);
     expect(ambiguous.rows.map((row) => row.logId)).toEqual(['company-intent', 'real-ambiguous']);
+  });
+
+  it('builds demand: prospects (empresas no afiliadas) e intereses', () => {
+    const rows = [
+      { ...sampleLogs[0], id: 'p1', pregunta_usuario: 'Schlumberger', resultado_tipo: 'sin_resultados', query_intent: 'COMPANY' },
+      { ...sampleLogs[0], id: 'p2', pregunta_usuario: 'schlumberger', resultado_tipo: 'sin_resultados', query_intent: 'COMPANY' },
+      { ...sampleLogs[0], id: 'p3', pregunta_usuario: 'exxon', resultado_tipo: 'sin_resultados', query_intent: 'COMPANY' },
+      { ...sampleLogs[0], id: 'i1', pregunta_usuario: 'Cuales son los costos de afiliacion?', resultado_tipo: 'conversation', query_intent: 'UNKNOWN' },
+      { ...sampleLogs[0], id: 'i2', pregunta_usuario: 'hay cursos o eventos?', resultado_tipo: 'conversation', query_intent: 'UNKNOWN' },
+      // no debe entrar: sector sin resultados (no es empresa)
+      { ...sampleLogs[0], id: 'x1', pregunta_usuario: 'gruas', resultado_tipo: 'sin_resultados', query_intent: 'SERVICE' },
+    ];
+
+    const demand = buildDemand(rows, { limit: 20, parserVersion: '1.0.0' });
+    const csv = demandProspectsToCsv(demand.prospects);
+
+    expect(demand.totalProspects).toBe(2); // schlumberger (x2) + exxon
+    expect(demand.prospects[0]).toMatchObject({ term: 'schlumberger', count: 2 });
+    expect(demand.prospects.some((row) => row.term === 'gruas')).toBe(false);
+    expect(demand.interests.some((row) => row.category === 'interes_afiliacion')).toBe(true);
+    expect(demand.interests.some((row) => row.category === 'interes_eventos')).toBe(true);
+    expect(csv).toContain('empresa_buscada,veces');
   });
 
   it('exports diagnostics as csv', () => {

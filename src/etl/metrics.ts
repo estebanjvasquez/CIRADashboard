@@ -4,6 +4,7 @@ import type {
   ApiQualityResponse,
   ApiDiagnosticsResponse,
   ApiNoResultsResponse,
+  ApiDemandResponse,
   ApiMetadataCoverageResponse,
   ApiRankingResponse,
   ApiSummaryResponse,
@@ -254,6 +255,76 @@ export function buildNoResultsDiagnostics(
     parserVersion: options.parserVersion,
     generatedAt: new Date().toISOString(),
   };
+}
+
+export function buildDemand(
+  rows: RawLogEntry[],
+  options: Pick<SummaryOptions, 'parserVersion'> & { limit: number },
+): ApiDemandResponse {
+  const prospectBuckets = new Map<string, { count: number; lastSeen: string; sampleQuestion: string }>();
+  const interestBuckets = new Map<string, { count: number; sampleQuestion: string }>();
+
+  for (const row of rows) {
+    const tipo = normalizeText(row.resultado_tipo);
+    const intent = normalizeText(row.query_intent);
+
+    // Prospectos: empresa buscada por nombre/RIF que no está afiliada (0 resultados).
+    if (tipo === 'sin_resultados' && (intent === 'company' || intent === 'rif')) {
+      const term = cleanCompanyTerm(row.pregunta_usuario);
+      if (term && term.length >= 2) {
+        const prev = prospectBuckets.get(term) ?? {
+          count: 0,
+          lastSeen: row.fecha_creacion,
+          sampleQuestion: row.pregunta_usuario,
+        };
+        prev.count += 1;
+        if (row.fecha_creacion > prev.lastSeen) prev.lastSeen = row.fecha_creacion;
+        prospectBuckets.set(term, prev);
+      }
+    }
+
+    // Intereses: respuestas conversacionales (fuera de búsqueda) categorizadas.
+    if (tipo === 'conversation') {
+      const category = categorizeInterest(row.pregunta_usuario);
+      const prev = interestBuckets.get(category) ?? { count: 0, sampleQuestion: row.pregunta_usuario };
+      prev.count += 1;
+      interestBuckets.set(category, prev);
+    }
+  }
+
+  const prospects = Array.from(prospectBuckets.entries())
+    .map(([term, data]) => ({ term, count: data.count, lastSeen: data.lastSeen, sampleQuestion: data.sampleQuestion }))
+    .sort((left, right) => right.count - left.count || right.lastSeen.localeCompare(left.lastSeen));
+
+  const interests = Array.from(interestBuckets.entries())
+    .map(([category, data]) => ({ category, count: data.count, sampleQuestion: data.sampleQuestion }))
+    .sort((left, right) => right.count - left.count);
+
+  return {
+    prospects: prospects.slice(0, options.limit),
+    interests,
+    totalProspects: prospects.length,
+    parserVersion: options.parserVersion,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function cleanCompanyTerm(value: string | undefined): string {
+  return normalizeText(value)
+    .replace(/^dame informacion sobre la empresa\s*/, '')
+    .replace(/^informacion sobre (la empresa )?/, '')
+    .replace(/[.,]+$/, '')
+    .trim();
+}
+
+function categorizeInterest(value: string | undefined): string {
+  const t = normalizeText(value);
+  if (/afili|cuota|costo|inscrib|membres/.test(t)) return 'interes_afiliacion';
+  if (/curso|evento|taller|capacit|foro|congreso/.test(t)) return 'interes_eventos';
+  if (/trabaj|empleo|pasant|\bcv\b|hoja de vida/.test(t)) return 'busqueda_empleo';
+  if (/precio|financ|credit|inversion/.test(t)) return 'consulta_economica';
+  if (/beneficio|contrasena|perfil/.test(t)) return 'soporte_afiliado';
+  return 'otro_fuera_alcance';
 }
 
 export function buildMetadataCoverage(
@@ -616,6 +687,14 @@ export function noResultsToCsv(rows: ApiNoResultsResponse['rows']): string {
     ]
       .map(csvCell)
       .join(','),
+  );
+  return [headers.join(','), ...lines].join('\n');
+}
+
+export function demandProspectsToCsv(rows: ApiDemandResponse['prospects']): string {
+  const headers = ['empresa_buscada', 'veces', 'ultima_vez', 'pregunta_ejemplo'];
+  const lines = rows.map((row) =>
+    [row.term, row.count, row.lastSeen, row.sampleQuestion].map(csvCell).join(','),
   );
   return [headers.join(','), ...lines].join('\n');
 }
